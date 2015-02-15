@@ -1,0 +1,28 @@
+{
+  "name": "atem",
+  "version": "0.0.1",
+
+  "description": "A module to control Blackmagic Design ATEM Switchers.",
+  "homepage": "https://github.com/miyukki/node-atem",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miyukki/node-atem"
+  },
+  "license": "MIT",
+  "keywords": [
+    "atem",
+    "blackmagic",
+    "bmd",
+    "switcher",
+    "video"
+  ],
+  "author": "miyukki <yusei1128@gmail.com>",
+
+  "main": "./lib/atem.js",
+  "scripts": {
+    "postinstall": "coffee -bc ./lib/atem.coffee"
+  },
+  "dependencies": {
+    "coffee-script": "1.7.1"
+  }
+}
