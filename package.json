@@ -1,5 +1,5 @@
 {
-  "name": "atem",
+  "name": "node-atem",
   "version": "0.0.1",
 
   "description": "A module to control Blackmagic Design ATEM Switchers.",
