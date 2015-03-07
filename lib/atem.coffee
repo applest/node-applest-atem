@@ -44,12 +44,19 @@ class ATEM
     0x00, 0x03, 0x00, 0x00
   ]
 
+  @TransitionStyle =
+    MIX:   0x00
+    DIP:   0x01
+    WIPE:  0x02
+    DVE:   0x03
+    STING: 0x04
+
   constructor: (local_port = 0) ->
     local_port ||= 1024 + Math.floor(Math.random() * 64511); # 1024-65535
 
     @state = {
       channels: {},
-      video: {},
+      video: { upstreamKeyNextState: [], upstreamKeyState: []},
       audio: { channels: {} }
     }
     @localPackedId = 1
@@ -92,8 +99,8 @@ class ATEM
     return if length != remote.size
 
     @sessionId = [message[2], message[3]]
-    if flags != 0x00
-      console.log "non zero flag", flags, message
+    # if flags != 0x00
+      # console.log "non zero flag", flags, message
     # @remotePacketId = message[10] << 8 | message[11]
     if remote.size == 20 # Bad
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
@@ -145,10 +152,17 @@ class ATEM
 
       when 'TrSS'
         @state.video.transitionStyle = @_parseNumber(buffer[0..1])
+        @state.video.upstreamKeyNextBackground = buffer[2] >> 0 & 1
+        @state.video.upstreamKeyNextState[0] = buffer[2] >> 1 & 1
+        @state.video.upstreamKeyNextState[1] = buffer[2] >> 2 & 1
+        @state.video.upstreamKeyNextState[2] = buffer[2] >> 3 & 1
+        @state.video.upstreamKeyNextState[3] = buffer[2] >> 4 & 1
+
+      when 'KeOn'
+        @state.video.upstreamKeyState[buffer[1]] = buffer[2] == 1 ? true : false
 
       when 'FtbS'
         @state.video.fadeToBlack = if buffer[1] > 0 then true else false
-
       # when 'TlIn'
       # when 'Time'
 
@@ -240,21 +254,55 @@ class ATEM
     @state
 
   sendAudioLevelNumber: ->
-    @_sendCommand("SALN", [0x01, 0x00, 0x00, 0x00]);
+    @_sendCommand("SALN", [0x01, 0x00, 0x00, 0x00])
 
-  setProgramInput: (input) ->
+  changeProgramInput: (input) ->
     @_sendCommand("CPgI", [0x00, 0x00, input >> 8, input & 0xFF])
 
-  setPreviewInput: (input) ->
+  changePreviewInput: (input) ->
     @_sendCommand("CPvI", [0x00, 0x00, input >> 8, input & 0xFF])
 
-  doFadeToBack: (active) ->
-    @_sendCommand("FtbA", [0x00, 0x02, 0x58, 0x99]);
+  doFadeToBlack: (active) ->
+    @_sendCommand("FtbA", [0x00, 0x02, 0x58, 0x99])
 
-  doTransitionAuto: (me = 0) ->
-    @_sendCommand("DAut", [me, 0x00, 0x00, 0x00]);
+  autoTransition: (me = 0) ->
+    @_sendCommand("DAut", [me, 0x00, 0x00, 0x00])
 
-  setAudioChannelGain: (channel, gain) ->
+  cutTransition: () ->
+    @_sendCommand("DCut", [0x00, 0xef, 0xbf, 0x5f])
+
+  changeTransitionPosition: (position) ->
+    @_sendCommand("CTPs", [0x00, 0xe4, position/256, position%256])
+    @_sendCommand("CTPs", [0x00, 0xf6, 0x00, 0x00]) if position == 10000
+
+  changeTransitionPreview: (state) ->
+    @_sendCommand("CTPr", [0x00, state, 0x00, 0x00])
+
+  changeTransitionType: (type) ->
+    @_sendCommand("CTTp", [0x01, 0x00, type, 0x02])
+
+  changeUpstreamKeyState: (number, state) ->
+    @_sendCommand("CKOn", [0x00, number, state, 0x90])
+
+  changeUpstreamKeyNextBackground: (state) ->
+    @state.video.upstreamKeyNextBackground = state
+    states = @state.video.upstreamKeyNextBackground +
+      (@state.video.upstreamKeyNextState[0] << 1) +
+      (@state.video.upstreamKeyNextState[1] << 2) +
+      (@state.video.upstreamKeyNextState[2] << 3) +
+      (@state.video.upstreamKeyNextState[3] << 4)
+    @_sendCommand("CTTp", [0x02, 0x00, 0x6a, states])
+
+  changeUpstreamKeyNextState: (number, state) ->
+    @state.video.upstreamKeyNextState[number] = state
+    states = @state.video.upstreamKeyNextBackground +
+      (@state.video.upstreamKeyNextState[0] << 1) +
+      (@state.video.upstreamKeyNextState[1] << 2) +
+      (@state.video.upstreamKeyNextState[2] << 3) +
+      (@state.video.upstreamKeyNextState[3] << 4)
+    @_sendCommand("CTTp", [0x02, 0x00, 0x6a, states])
+
+  changeAudioChannelGain: (channel, gain) ->
     gain = gain*65381;
     @_sendCommand("CAMI", [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
 
