@@ -11,20 +11,9 @@ var ATEM = require('node-atem');
 var atem = new ATEM();
 atem.connect('192.168.1.220') // Replace your ATEM Switcher IP
 
-atem.setProgramInput(1);
-atem.setPreviewInput(2);
-atem.changeTransitionAuto();
-```
-
-```javascript
-var ATEM = require('node-atem');
-
-var atem = new ATEM();
-atem.connect('192.168.1.220') // Replace your ATEM Switcher IP
-
-atem.on('change', function() {
-//  console.log(change);
-});
+atem.changeProgramInput(1);
+atem.changePreviewInput(2);
+atem.autoTransition();
 ```
 
 Installation
@@ -39,6 +28,8 @@ See atem-web-controller.
 
 Contributing
 --------
-
-Donate
---------
+1. Fork it ( https://github.com/miyukki/node-atem )
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create new Pull Request
