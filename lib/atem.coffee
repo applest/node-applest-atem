@@ -66,6 +66,7 @@ class ATEM
     # @socket.on 'listening', =>
       # console.log "server listening : #{@socket.address().address}"
     @socket.bind local_port
+    @sessionId = [];
 
   connect: (@address) ->
     @_sendPacket COMMAND_CONNECT_HELLO
@@ -306,9 +307,11 @@ class ATEM
     gain = gain*65381;
     @_sendCommand("CAMI", [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
 
-
   # CAMI command structure:    CAMI    [01=buttons, 02=vol, 04=pan (toggle bits)] - [input number, 0-…] - [buttons] - [buttons] - [vol] - [vol] - [pan] - [pan]
   changeAudioChannelStatus: (channel, status) ->
     @_sendCommand("CAMI", [0x01, 0x00, channel >> 8, channel & 0xFF, status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+  
+  changeAuxInput: (aux, input) ->
+    @_sendCommand("CAuS", [1, aux-1, input >> 8, input & 0xFF]);
 
 module.exports = ATEM
