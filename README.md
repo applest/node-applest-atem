@@ -1,4 +1,4 @@
-node-applest-atem [![npm version](https://badge.fury.io/js/applest-atem.svg)](http://badge.fury.io/js/applest-atem)
+node-applest-atem [![npm version](https://img.shields.io/npm/v/applest-atem.svg?style=flat-square)](https://www.npmjs.com/package/applest-atem) [![Dependency Status](https://david-dm.org/applest/node-applest-atem.svg?style=flat-square)](https://david-dm.org/applest/node-applest-atem) [![devDependency Status](https://david-dm.org/applest/node-applest-atem/dev-status.svg?style=flat-square)](https://david-dm.org/applest/node-applest-atem#info=devDependencies)
 ========
 A module to control Blackmagic Design ATEM Switchers.
 
