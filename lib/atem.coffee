@@ -1,34 +1,9 @@
-dgram = require 'dgram'
-
-###
-var atem = new ATEM();
-atem.connect('192.168.1.220')
-
-{
-  _ver0: 2,
-  _ver1: 15,
-  _pin: "ATEM Television Studio",
-  channels: {
-
-  },
-  video: {
-    programInput: 1,
-    previewInput: 2,
-    transitionPreview: false,
-    transitionPosition: 0.0, // 10000
-    fadeToBlack: false
-  },
-  audio: {
-    channels: {
-
-    }
-  }
-}
-###
+dgram        =  require 'dgram'
+EventEmitter = (require 'events').EventEmitter
 
 class ATEM
-  DEBUG = false
-  SWITCHER_PORT = 9910
+  DEBUG = if process.env['ATEM_DEBUG'] then process.env['ATEM_DEBUG'] == 'true' else false
+  DEFAULT_PORT = 9910
 
   COMMAND_CONNECT_HELLO = [
     0x10, 0x14, 0x53, 0xAB,
@@ -44,6 +19,15 @@ class ATEM
     0x00, 0x03, 0x00, 0x00
   ]
 
+  @Model =
+    'TVS':     0x01
+    '1ME':     0x02
+    '2ME':     0x03
+    'PS4K':    0x04
+    '1ME4K':   0x05
+    '2ME4K':   0x06
+    '2MEBS4K': 0x07
+
   @TransitionStyle =
     MIX:   0x00
     DIP:   0x01
@@ -51,25 +35,36 @@ class ATEM
     DVE:   0x03
     STING: 0x04
 
+  @TallyState =
+    None:    0x00
+    Program: 0x01
+    Preview: 0x02
+
   constructor: (local_port = 0) ->
-    local_port ||= 1024 + Math.floor(Math.random() * 64511); # 1024-65535
+    local_port ||= 1024 + Math.floor(Math.random() * 64511) # 1024-65535
 
     @state = {
-      channels: {},
-      video: { upstreamKeyNextState: [], upstreamKeyState: []},
+      tallys : []
+      channels: {}
+      video: { upstreamKeyNextState: [], upstreamKeyState: [], auxs: {} }
       audio: { channels: {} }
     }
     @localPackedId = 1
 
     @socket = dgram.createSocket 'udp4'
     @socket.on 'message', @_receivePacket
-    # @socket.on 'listening', =>
-      # console.log "server listening : #{@socket.address().address}"
     @socket.bind local_port
-    @sessionId = [];
+    @sessionId = []
+    @event = new EventEmitter
 
-  connect: (@address) ->
+  connect: (@address, @port = DEFAULT_PORT) ->
     @_sendPacket COMMAND_CONNECT_HELLO
+
+  on: (name, callback) ->
+    @event.on name, callback
+
+  once: (name, callback) ->
+    @event.once name, callback
 
   _sendCommand: (command, options) ->
     message = []
@@ -92,7 +87,10 @@ class ATEM
 
   _sendPacket: (message) ->
     buffer = new Buffer message
-    @socket.send buffer, 0, buffer.length, SWITCHER_PORT, @address
+
+    console.log 'SEND', buffer if DEBUG
+
+    @socket.send buffer, 0, buffer.length, @port, @address
 
   _receivePacket: (message, remote) =>
     length = ((message[0] & 0x07) << 8) | message[1]
@@ -105,19 +103,24 @@ class ATEM
     # @remotePacketId = message[10] << 8 | message[11]
     if remote.size == 20 # Bad
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
+      @event.emit 'connect', null, null
     else if flags & 0x01 || flags & 0x02
       @_sendPacket [
         0x80, 0x0C, @sessionId[0], @sessionId[1],
         message[10], message[11], 0x00, 0x00,
         0x00, 0x41, 0x00, 0x00
       ]
+      @event.emit 'ping', null, null
     if remote.size > 12 && remote.size != 20
       @_parseCommand message.slice(12)
+      @event.emit 'commandReceived', null, @state
 
   _parseCommand: (buffer) ->
     length = @_parseNumber(buffer[0..1])
     name = @_parseString(buffer[4..7])
-    # console.log "#{name}(#{length}) ", buffer.slice(0, length)
+
+    console.log 'RECV', "#{name}(#{length})", buffer.slice(0, length) if DEBUG
+
     @_setStatus name, buffer.slice(0, length).slice(8)
     if buffer.length > length
       @_parseCommand buffer.slice(length)
@@ -130,6 +133,7 @@ class ATEM
 
       when '_pin'
         @state._pin = @_parseString(buffer)
+        @state.model = buffer[40] # XXX: is this sure?
 
       when 'InPr'
         channel = @_parseNumber(buffer[0..1])
@@ -148,27 +152,31 @@ class ATEM
 
       when 'TrPs'
         @state.video.transitionPosition = @_parseNumber(buffer[4..5])/10000 # 0 - 10000
-        # @state.TrPs_frameCount = buffer[2] # Frames count down
-        # console.log "#{buffer[0]}:#{buffer[1]}:#{buffer[2]}:#{buffer[3]}"
+        @state.video.transitionFrameCount = buffer[2] # 0 - 30
 
       when 'TrSS'
         @state.video.transitionStyle = @_parseNumber(buffer[0..1])
-        @state.video.upstreamKeyNextBackground = buffer[2] >> 0 & 1
-        @state.video.upstreamKeyNextState[0] = buffer[2] >> 1 & 1
-        @state.video.upstreamKeyNextState[1] = buffer[2] >> 2 & 1
-        @state.video.upstreamKeyNextState[2] = buffer[2] >> 3 & 1
-        @state.video.upstreamKeyNextState[3] = buffer[2] >> 4 & 1
+        @state.video.upstreamKeyNextBackground = (buffer[2] >> 0 & 1) == 0x01
+        @state.video.upstreamKeyNextState[0] = (buffer[2] >> 1 & 1) == 0x01
+        if @state.model != ATEM.Model.TVS && @state.model != ATEM.Model.PS4K
+          @state.video.upstreamKeyNextState[1] = (buffer[2] >> 2 & 1) == 0x01
+          @state.video.upstreamKeyNextState[2] = (buffer[2] >> 3 & 1) == 0x01
+          @state.video.upstreamKeyNextState[3] = (buffer[2] >> 4 & 1) == 0x01
 
       when 'KeOn'
         @state.video.upstreamKeyState[buffer[1]] = buffer[2] == 1 ? true : false
 
-      when 'FtbS'
+      when 'FtbS' # Fade To Black Setting
         @state.video.fadeToBlack = if buffer[1] > 0 then true else false
-      # when 'TlIn'
-      # when 'Time'
 
-      # Audio Monitor Input Position
-      when 'AMIP'
+      when 'TlIn' # Tally Input
+        @state.tallys = @_bufferToArray(buffer[2..])
+
+      when 'AuxS' # Auxially Setting
+        aux = buffer[0]
+        @state.video.auxs[aux] = @_parseNumber(buffer[2..3])
+
+      when 'AMIP' # Audio Monitor Input Position
         channel = @_parseNumber buffer[0..1]
         @state.audio.channels[channel] =
           on: if buffer[8] == 1 then true else false
@@ -177,8 +185,7 @@ class ATEM
           rawGain: @_parseNumber(buffer[10..11])
           # 0xD8F0 - 0x0000 - 0x2710
           rawPan: @_parseNumber(buffer[12..13])
-        # console.log @state.audio.channels
-        # 6922
+          # 6922
 
       #AMMO(16)  <Buffer 00 10 00 00 41 4d 4d 4f 80 00 00 00 01 01 00 02>
       #AMMO(16)  <Buffer 00 10 00 00 41 4d 4d 4f 80 00 00 00 00 01 00 02>
@@ -202,12 +209,11 @@ class ATEM
       # 172 = | 4byte | Command code (AMLv) 4byte |
       #       | 2byte channel num | 2byte channel num| master | zero | channels...
       when 'AMLv'
-        channel = buffer[0]*256 + buffer[1];
-        # console.log buffer.length
+        channel = buffer[0]*256 + buffer[1]
         offset = 4
         channels = []
 
-        # master volume
+        # Master volume
         for i in [0...3]
           if i == 0
             gain = buffer[offset + 1] << 16 |
@@ -218,21 +224,16 @@ class ATEM
             for j in [0...8]
               number = buffer[offset + j*2] << 8 | buffer[offset + j*2 + 1]
               channels.push number if number != 0
-            # console.log buffer.slice(offset, offset + 16)
           offset = offset + 16
-        # console.log channels
 
+        # Channels volume
         for i in [0...numberOfChannels]
-          # console.log buffer.slice(offset, offset + 16)
           gain = buffer[offset + 1] << 16 |
                  buffer[offset + 2] << 8 |
                  buffer[offset + 3]
-          # console.log i, gain/8388607, gain
           @state.audio[channels[i]] = { gain: gain/8388607, raw: gain }
           offset = offset + 16
-          # ...
 
-  # Parse number
   # Convert number from bytes.
   _parseNumber: (bytes) ->
     num = 0
@@ -241,49 +242,54 @@ class ATEM
       num = num << 8 if (i < bytes.length-1)
     num
 
-  # Parse string (ATEM dialect)
   # Convert string from character array.
   # If appear null character in array, ignore thereafter chars.
   _parseString: (bytes) ->
-    str = ""
+    str = ''
     for char in bytes
       break if char == 0
       str += String.fromCharCode(char)
     str
 
-  getState: ->
-    @state
+  _bufferToArray: (buffers) ->
+    arr = []
+    for buffer in buffers
+      arr.push(buffer)
+    arr
 
   sendAudioLevelNumber: ->
-    @_sendCommand("SALN", [0x01, 0x00, 0x00, 0x00])
+    @_sendCommand('SALN', [0x01, 0x00, 0x00, 0x00])
 
   changeProgramInput: (input) ->
-    @_sendCommand("CPgI", [0x00, 0x00, input >> 8, input & 0xFF])
+    @_sendCommand('CPgI', [0x00, 0x00, input >> 8, input & 0xFF])
 
   changePreviewInput: (input) ->
-    @_sendCommand("CPvI", [0x00, 0x00, input >> 8, input & 0xFF])
+    @_sendCommand('CPvI', [0x00, 0x00, input >> 8, input & 0xFF])
 
-  doFadeToBlack: (active) ->
-    @_sendCommand("FtbA", [0x00, 0x02, 0x58, 0x99])
+  changeAuxInput: (aux, input) ->
+    @_sendCommand('CAuS', [0x01, aux, input >> 8, input & 0xFF])
 
-  autoTransition: (me = 0) ->
-    @_sendCommand("DAut", [me, 0x00, 0x00, 0x00])
+  fadeToBlack: ->
+    @_sendCommand('FtbA', [0x00, 0x02, 0x58, 0x99])
 
-  cutTransition: () ->
-    @_sendCommand("DCut", [0x00, 0xef, 0xbf, 0x5f])
+  autoTransition: ->
+    @_sendCommand('DAut', [0x00, 0x00, 0x00, 0x00])
+
+  cutTransition: ->
+    @_sendCommand('DCut', [0x00, 0xef, 0xbf, 0x5f])
 
   changeTransitionPosition: (position) ->
-    @_sendCommand("CTPs", [0x00, 0xe4, position/256, position%256])
-    @_sendCommand("CTPs", [0x00, 0xf6, 0x00, 0x00]) if position == 10000
+    @_sendCommand('CTPs', [0x00, 0xe4, position/256, position%256])
+    @_sendCommand('CTPs', [0x00, 0xf6, 0x00, 0x00]) if position == 10000
 
   changeTransitionPreview: (state) ->
-    @_sendCommand("CTPr", [0x00, state, 0x00, 0x00])
+    @_sendCommand('CTPr', [0x00, state, 0x00, 0x00])
 
   changeTransitionType: (type) ->
-    @_sendCommand("CTTp", [0x01, 0x00, type, 0x02])
+    @_sendCommand('CTTp', [0x01, 0x00, type, 0x02])
 
   changeUpstreamKeyState: (number, state) ->
-    @_sendCommand("CKOn", [0x00, number, state, 0x90])
+    @_sendCommand('CKOn', [0x00, number, state, 0x90])
 
   changeUpstreamKeyNextBackground: (state) ->
     @state.video.upstreamKeyNextBackground = state
@@ -292,7 +298,7 @@ class ATEM
       (@state.video.upstreamKeyNextState[1] << 2) +
       (@state.video.upstreamKeyNextState[2] << 3) +
       (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand("CTTp", [0x02, 0x00, 0x6a, states])
+    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
 
   changeUpstreamKeyNextState: (number, state) ->
     @state.video.upstreamKeyNextState[number] = state
@@ -301,17 +307,14 @@ class ATEM
       (@state.video.upstreamKeyNextState[1] << 2) +
       (@state.video.upstreamKeyNextState[2] << 3) +
       (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand("CTTp", [0x02, 0x00, 0x6a, states])
+    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
 
   changeAudioChannelGain: (channel, gain) ->
-    gain = gain*65381;
-    @_sendCommand("CAMI", [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
+    gain = gain * 65381
+    @_sendCommand('CAMI', [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
 
   # CAMI command structure:    CAMI    [01=buttons, 02=vol, 04=pan (toggle bits)] - [input number, 0-…] - [buttons] - [buttons] - [vol] - [vol] - [pan] - [pan]
   changeAudioChannelStatus: (channel, status) ->
-    @_sendCommand("CAMI", [0x01, 0x00, channel >> 8, channel & 0xFF, status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-  
-  changeAuxInput: (aux, input) ->
-    @_sendCommand("CAuS", [1, aux-1, input >> 8, input & 0xFF]);
+    @_sendCommand('CAMI', [0x01, 0x00, channel >> 8, channel & 0xFF, status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
 module.exports = ATEM

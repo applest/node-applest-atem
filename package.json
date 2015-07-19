@@ -1,12 +1,11 @@
 {
-  "name": "node-atem",
-  "version": "0.0.3",
-
+  "name": "applest-atem",
+  "version": "0.1.0",
   "description": "A module to control Blackmagic Design ATEM Switchers.",
-  "homepage": "https://github.com/miyukki/node-atem",
+  "homepage": "https://github.com/applest/node-applest-atem",
   "repository": {
     "type": "git",
-    "url": "https://github.com/miyukki/node-atem"
+    "url": "https://github.com/applest/node-applest-atem"
   },
   "license": "MIT",
   "keywords": [
@@ -17,12 +16,18 @@
     "video"
   ],
   "author": "miyukki <yusei1128@gmail.com>",
-
   "main": "./lib/atem.js",
   "scripts": {
+    "test": "mocha test",
     "postinstall": "coffee -bc ./lib/atem.coffee"
   },
   "dependencies": {
+    "async": "^1.3.0",
     "coffee-script": "1.7.1"
+  },
+  "devDependencies": {
+    "chai": "3.1.0",
+    "it-each": "^0.3.1",
+    "mocha": "2.2.5"
   }
 }
