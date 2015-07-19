@@ -1,4 +1,4 @@
-node-applest-atem
+node-applest-atem [![npm version](https://badge.fury.io/js/applest-atem.svg)](http://badge.fury.io/js/applest-atem)
 ========
 A module to control Blackmagic Design ATEM Switchers.
 
