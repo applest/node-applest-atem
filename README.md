@@ -22,7 +22,7 @@ atem.changeProgramInput(1);
 atem.changePreviewInput(2);
 atem.autoTransition();
 
-atem.on('commandReceive', function(err, state) {
+atem.on('stateChanged', function(err, state) {
   console.log(state); // catch the ATEM state.
 });
 console.log(atem.state); // or use this.
