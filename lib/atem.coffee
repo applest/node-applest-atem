@@ -103,7 +103,8 @@ class ATEM
     # @remotePacketId = message[10] << 8 | message[11]
     if remote.size == 20 # Bad
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
-      @event.emit 'connect', null, null
+      @event.once 'ping', (err) => # Bad
+        @event.emit 'connect', err, null
     else if flags & 0x01 || flags & 0x02
       @_sendPacket [
         0x80, 0x0C, @sessionId[0], @sessionId[1],
