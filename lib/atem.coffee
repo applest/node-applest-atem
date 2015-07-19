@@ -113,7 +113,7 @@ class ATEM
       @event.emit 'ping', null, null
     if remote.size > 12 && remote.size != 20
       @_parseCommand message.slice(12)
-      @event.emit 'commandReceived', null, @state
+      @event.emit 'stateChanged', null, @state
 
   _parseCommand: (buffer) ->
     length = @_parseNumber(buffer[0..1])
@@ -314,7 +314,7 @@ class ATEM
     @_sendCommand('CAMI', [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
 
   # CAMI command structure:    CAMI    [01=buttons, 02=vol, 04=pan (toggle bits)] - [input number, 0-…] - [buttons] - [buttons] - [vol] - [vol] - [pan] - [pan]
-  changeAudioChannelStatus: (channel, status) ->
+  changeAudioChannelState: (channel, status) ->
     @_sendCommand('CAMI', [0x01, 0x00, channel >> 8, channel & 0xFF, status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
 module.exports = ATEM
