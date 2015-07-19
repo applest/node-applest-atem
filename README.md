@@ -18,9 +18,11 @@ var ATEM = require('applest-atem');
 var atem = new ATEM();
 atem.connect('192.168.1.220'); // Replace your ATEM switcher. address.
 
-atem.changeProgramInput(1);
-atem.changePreviewInput(2);
-atem.autoTransition();
+atem.on('connect', function() {
+  atem.changeProgramInput(1);
+  atem.changePreviewInput(2);
+  atem.autoTransition();
+});
 
 atem.on('stateChanged', function(err, state) {
   console.log(state); // catch the ATEM state.
