@@ -13,7 +13,7 @@ describe 'Atem', ->
 
   before (done) ->
     sw.once('ping', ->
-      sw.once('commandReceived', done)
+      sw.once('stateChanged', done)
     ) # Change me
     sw.connect(ATEM_ADDR, ATEM_PORT)
 
@@ -30,7 +30,7 @@ describe 'Atem', ->
 
     it 'expects change all camera input', (done) ->
       async.eachSeries(getCameraInputs(), (input, next) ->
-        sw.once('commandReceived', (err, state) ->
+        sw.once('stateChanged', (err, state) ->
           expect(state.video.programInput).be.eq(input)
           next err, null
         )
@@ -44,7 +44,7 @@ describe 'Atem', ->
 
     it 'expects change all camera input', (done) ->
       async.eachSeries(getCameraInputs(), (input, next) ->
-        sw.once('commandReceived', (err, state) ->
+        sw.once('stateChanged', (err, state) ->
           expect(state.video.previewInput).be.eq(input)
           next err, null
         )
@@ -62,7 +62,7 @@ describe 'Atem', ->
       auxs =  Object.keys(sw.state.video.auxs)
       async.eachSeries(auxs, (aux, nextAux) ->
         async.eachSeries(getCameraInputs(), (input, next) ->
-          sw.once('commandReceived', (err, state) ->
+          sw.once('stateChanged', (err, state) ->
             expect(state.video.auxs[aux]).be.eq(input)
             next err, null
           )
@@ -119,7 +119,7 @@ describe 'Atem', ->
       expect(sw.state.video.previewInput).be.eq(2)
 
     it 'expects swap program and preview input', (done) ->
-      sw.once('commandReceived', (err, state) ->
+      sw.once('stateChanged', (err, state) ->
         expect(state.video.programInput).be.eq(2)
         expect(state.video.previewInput).be.eq(1)
         done err, null
@@ -134,7 +134,7 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change transition position', (done) ->
-      sw.once('commandReceived', (err, state) ->
+      sw.once('stateChanged', (err, state) ->
         expect(state.video.transitionPosition).be.eq(0.5)
         done err, null
       )
@@ -153,7 +153,7 @@ describe 'Atem', ->
       expect(sw.state.video.transitionPreview).be.false
 
     it 'expects true when enable', (done) ->
-      sw.once('commandReceived', (err, state) ->
+      sw.once('stateChanged', (err, state) ->
         expect(state.video.transitionPreview).be.true
         done err, null
       )
@@ -173,7 +173,7 @@ describe 'Atem', ->
         (v for k, v of ATEM.TransitionStyle)
 
       async.eachSeries(types, (type, next) ->
-        sw.once('commandReceived', (err, state) ->
+        sw.once('stateChanged', (err, state) ->
           expect(state.video.transitionStyle).be.eq(type)
           next err, null
         )
@@ -192,7 +192,7 @@ describe 'Atem', ->
 
     it 'expects change', (done) ->
       async.forEachOfSeries(sw.state.video.upstreamKeyState, (state, index, next) ->
-        sw.once('commandReceived', (err, state) ->
+        sw.once('stateChanged', (err, state) ->
           expect(state.video.upstreamKeyState[index]).be.true
           next null, null
         )
@@ -213,11 +213,57 @@ describe 'Atem', ->
 
     it 'expects change', (done) ->
       async.forEachOfSeries(sw.state.video.upstreamKeyNextState, (state, index, next) ->
-        sw.once('commandReceived', (err, state) ->
+        sw.once('stateChanged', (err, state) ->
           expect(state.video.upstreamKeyNextState[index]).be.true
           next null, null
         )
         sw.changeUpstreamKeyNextState(index, true)
+      , done)
+
+    after initialize
+
+  getAudioChannels = ->
+    Object.keys(sw.state.audio.channels).reduce((arr, channel) ->
+      arr.push(channel) if channel < 2000
+      arr
+    , [])
+
+  describe 'changeAudioChannelGain', ->
+    initialize = (done) ->
+      async.eachSeries(getAudioChannels(), (channel, next) ->
+        sw.changeAudioChannelGain(channel, 0.5011853596610636)
+        next null, null
+      , done)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      async.eachSeries(getAudioChannels(), (channel, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.audio.channels[channel].gain).be.eq(1)
+          next null, null
+        )
+        sw.changeAudioChannelGain(channel, 1)
+      , done)
+
+    after initialize
+
+  describe 'changeAudioChannelState', ->
+    initialize = (done) ->
+      async.eachSeries(getAudioChannels(), (channel, next) ->
+        sw.changeAudioChannelState(channel, false)
+        next null, null
+      , done)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      async.eachSeries(getAudioChannels(), (channel, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.audio.channels[channel].on).be.true
+          next err, null
+        )
+        sw.changeAudioChannelState(channel, true)
       , done)
 
     after initialize
