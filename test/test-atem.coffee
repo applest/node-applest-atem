@@ -201,6 +201,24 @@ describe 'Atem', ->
 
     after initialize
 
+  describe 'changeUpstreamKeyNextBackground', ->
+    initialize = (done) ->
+      sw.changeUpstreamKeyNextState(0, false)
+      sw.changeUpstreamKeyNextBackground(true)
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      sw.once('stateChanged', (err, state) ->
+        expect(state.video.upstreamKeyNextBackground).be.false
+        done null, null
+      )
+      sw.changeUpstreamKeyNextState(0, true)
+      sw.changeUpstreamKeyNextBackground(false)
+
+    after initialize
+
   describe 'changeUpstreamKeyNextState', ->
     initialize = (done) ->
       async.forEachOfSeries(sw.state.video.upstreamKeyNextState, (state, index, next) ->
