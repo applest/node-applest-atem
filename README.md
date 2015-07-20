@@ -32,7 +32,7 @@ console.log(atem.state); // or use this.
 
 Demo
 --------
-See atem-web-controller.
+See [live-controller](https://github.com/applest/live-controller).
 
 Debug
 --------
@@ -64,7 +64,7 @@ $ ATEM_ADDR=192.168.1.220 ATEM_PORT=9910 cake test
 
 Contributing
 --------
-1. Fork it ( https://github.com/miyukki/applest-atem )
+1. Fork it ( https://github.com/applest/node-applest-atem )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Add your feature and write a test
 4. Commit your changes (`git commit -am 'Add some feature'`)
