@@ -19,6 +19,8 @@ class ATEM
     0x00, 0x03, 0x00, 0x00
   ]
 
+  AUDIO_GAIN_RATE = 65381
+
   @Model =
     'TVS':     0x01
     '1ME':     0x02
@@ -182,7 +184,7 @@ class ATEM
         @state.audio.channels[channel] =
           on: if buffer[8] == 1 then true else false
           afv: if buffer[8] == 2 then true else false
-          gain: @_parseNumber(buffer[10..11])/65381
+          gain: @_parseNumber(buffer[10..11])/AUDIO_GAIN_RATE
           rawGain: @_parseNumber(buffer[10..11])
           # 0xD8F0 - 0x0000 - 0x2710
           rawPan: @_parseNumber(buffer[12..13])
@@ -190,6 +192,12 @@ class ATEM
 
       #AMMO(16)  <Buffer 00 10 00 00 41 4d 4d 4f 80 00 00 00 01 01 00 02>
       #AMMO(16)  <Buffer 00 10 00 00 41 4d 4d 4f 80 00 00 00 00 01 00 02>
+      when 'AMMO' # Audio Monitor Master Output
+        @state.audio.master =
+          afv: if buffer[4] == 1 then true else false
+          gain: @_parseNumber(buffer[0..1])/AUDIO_GAIN_RATE
+          rawGain: @_parseNumber(buffer[0..1])
+
       # Audio Monitor Level
       # <Buffer 00 03 f2 73 00 03 dc 98 00 7f db a2 00 7f e0 cb> = Master
       # <Buffer 00 00 03 33 00 20 00 00 43 43 64 50 03 08 00 80> = Info???
@@ -220,7 +228,7 @@ class ATEM
             gain = buffer[offset + 1] << 16 |
                    buffer[offset + 2] << 8 |
                    buffer[offset + 3]
-            @state.audio.master = { gain: gain/8388607, raw: gain }
+            @_merge(@state.audio.master, { level: gain/8388607 })
           else if i == 2
             for j in [0...8]
               number = buffer[offset + j*2] << 8 | buffer[offset + j*2 + 1]
@@ -232,7 +240,7 @@ class ATEM
           gain = buffer[offset + 1] << 16 |
                  buffer[offset + 2] << 8 |
                  buffer[offset + 3]
-          @state.audio[channels[i]] = { gain: gain/8388607, raw: gain }
+          @_merge(@state.audio.channels[i], { level: gain/8388607 })
           offset = offset + 16
 
   # Convert number from bytes.
@@ -257,6 +265,11 @@ class ATEM
     for buffer in buffers
       arr.push(buffer)
     arr
+
+  _merge: (obj1, obj2) ->
+    obj2 = {} unless obj2?
+    for key2 of obj2
+      obj1[obj2] = obj2[obj2] if obj2.hasOwnProperty(key2)
 
   sendAudioLevelNumber: ->
     @_sendCommand('SALN', [0x01, 0x00, 0x00, 0x00])
@@ -310,8 +323,12 @@ class ATEM
       (@state.video.upstreamKeyNextState[3] << 4)
     @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
 
+  changeAudioMasterGain: (gain) ->
+    gain = gain * AUDIO_GAIN_RATE
+    @_sendCommand('CAMM', [0x01, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
+
   changeAudioChannelGain: (channel, gain) ->
-    gain = gain * 65381
+    gain = gain * AUDIO_GAIN_RATE
     @_sendCommand('CAMI', [0x02, 0x00, channel/256, channel%256, 0x00, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
 
   # CAMI command structure:    CAMI    [01=buttons, 02=vol, 04=pan (toggle bits)] - [input number, 0-…] - [buttons] - [buttons] - [vol] - [vol] - [pan] - [pan]

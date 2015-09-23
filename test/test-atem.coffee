@@ -240,6 +240,22 @@ describe 'Atem', ->
 
     after initialize
 
+  describe 'changeAudioMasterGain', ->
+    initialize = (done) ->
+      sw.changeAudioMasterGain(0.5011853596610636)
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      sw.once('stateChanged', (err, state) ->
+        expect(state.audio.master.gain).be.eq(1)
+        done err, null
+      )
+      sw.changeAudioMasterGain(1)
+
+    after initialize
+
   getAudioChannels = ->
     Object.keys(sw.state.audio.channels).reduce((arr, channel) ->
       arr.push(channel) if channel < 2000
