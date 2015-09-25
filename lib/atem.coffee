@@ -42,15 +42,21 @@ class ATEM
     Program: 0x01
     Preview: 0x02
 
+  state:
+    tallys : []
+    channels: {}
+    video:
+      upstreamKeyNextState: []
+      upstreamKeyState: []
+      downstreamKeyOn: []
+      downstreamKeyTie: []
+      auxs: {}
+    audio:
+      channels: {}
+
   constructor: (local_port = 0) ->
     local_port ||= 1024 + Math.floor(Math.random() * 64511) # 1024-65535
 
-    @state = {
-      tallys : []
-      channels: {}
-      video: { upstreamKeyNextState: [], upstreamKeyState: [], auxs: {} }
-      audio: { channels: {} }
-    }
     @localPackedId = 1
 
     @socket = dgram.createSocket 'udp4'
@@ -166,8 +172,14 @@ class ATEM
           @state.video.upstreamKeyNextState[2] = (buffer[2] >> 3 & 1) == 0x01
           @state.video.upstreamKeyNextState[3] = (buffer[2] >> 4 & 1) == 0x01
 
+      when 'DskS'
+        @state.video.downstreamKeyOn[buffer[0]] = if buffer[1] == 1 then true else false
+
+      when 'DskP'
+        @state.video.downstreamKeyTie[buffer[0]] = if buffer[1] == 1 then true else false
+
       when 'KeOn'
-        @state.video.upstreamKeyState[buffer[1]] = buffer[2] == 1 ? true : false
+        @state.video.upstreamKeyState[buffer[1]] = if buffer[2] == 1 then true else false
 
       when 'FtbS' # Fade To Black Setting
         @state.video.fadeToBlack = if buffer[1] > 0 then true else false
@@ -301,6 +313,12 @@ class ATEM
 
   changeTransitionType: (type) ->
     @_sendCommand('CTTp', [0x01, 0x00, type, 0x02])
+
+  changeDownstreamKeyOn: (number, state) ->
+    @_sendCommand('CDsL', [number, state, 0xff, 0xff])
+
+  changeDownstreamKeyTie: (number, state) ->
+    @_sendCommand('CDsT', [number, state, 0xff, 0xff])
 
   changeUpstreamKeyState: (number, state) ->
     @_sendCommand('CKOn', [0x00, number, state, 0x90])
