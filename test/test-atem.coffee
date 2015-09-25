@@ -180,6 +180,48 @@ describe 'Atem', ->
         sw.changeTransitionType(type)
       , done)
 
+  describe 'changeDownstreamKeyOn', ->
+    initialize = (done) ->
+      async.forEachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+        sw.changeDownstreamKeyOn(index, false)
+        next null, null
+      )
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      async.forEachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.downstreamKeyOn[index]).be.true
+          next null, null
+        )
+        sw.changeDownstreamKeyOn(index, true)
+      , done)
+
+    after initialize
+
+  describe 'changeDownstreamKeyTie', ->
+    initialize = (done) ->
+      async.forEachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
+        sw.changeDownstreamKeyTie(index, false)
+        next null, null
+      )
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      async.forEachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.downstreamKeyTie[index]).be.true
+          next null, null
+        )
+        sw.changeDownstreamKeyTie(index, true)
+      , done)
+
+    after initialize
+
   describe 'changeUpstreamKeyState', ->
     initialize = (done) ->
       async.forEachOfSeries(sw.state.video.upstreamKeyState, (state, index, next) ->
