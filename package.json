@@ -1,6 +1,6 @@
 {
   "name": "applest-atem",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A module to control Blackmagic Design ATEM Switchers.",
   "homepage": "https://github.com/applest/node-applest-atem",
   "repository": {
