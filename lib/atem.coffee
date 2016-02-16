@@ -43,6 +43,13 @@ class ATEM
     Program: 0x01
     Preview: 0x02
 
+  @PacketFlag =
+    Sync:    0x01
+    Connect: 0x02
+    Repeat:  0x04
+    Unknown: 0x08
+    Ack:     0x10
+
   state:
     tallys : []
     channels: {}
@@ -57,27 +64,30 @@ class ATEM
 
   connected: false
   localPackedId: 1
+  sessionId: []
 
-  constructor: (local_port = 0) ->
+  constructor: ->
+    @event = new EventEmitter
+    @event.on 'ping', (err) =>
+      @lastConnectAt = new Date().getTime()
+
+    setInterval( =>
+      return if @lastConnectAt + RECONNECT_INTERVAL > new Date().getTime()
+      if @connected
+        @connected = false
+        @event.emit 'disconnect', null, null
+      @localPackedId = 1
+      @sessionId = []
+      @connect(@address, @port)
+    , RECONNECT_INTERVAL)
+
+  connect: (@address, @port = DEFAULT_PORT, local_port = 0) ->
     local_port ||= 1024 + Math.floor(Math.random() * 64511) # 1024-65535
 
     @socket = dgram.createSocket 'udp4'
     @socket.on 'message', @_receivePacket
     @socket.bind local_port
-    @sessionId = []
-    @event = new EventEmitter
-    @event.on 'ping', (err) =>
-      @lastPingedAt = new Date().getTime()
 
-    setInterval( =>
-      if @lastPingedAt + RECONNECT_INTERVAL < new Date().getTime()
-        if @connected
-          @connected = false
-          @event.emit 'disconnect', null, null
-        @connect(@address, @port) if @lastPingedAt + RECONNECT_INTERVAL < new Date().getTime()
-    , RECONNECT_INTERVAL)
-
-  connect: (@address, @port = DEFAULT_PORT) ->
     @_sendPacket COMMAND_CONNECT_HELLO
 
   on: (name, callback) ->
@@ -114,19 +124,16 @@ class ATEM
 
   _receivePacket: (message, remote) =>
     length = ((message[0] & 0x07) << 8) | message[1]
-    flags = message[0] >> 3
     return if length != remote.size
-
+    flags = message[0] >> 3
     @sessionId = [message[2], message[3]]
-    # if flags != 0x00
-      # console.log "non zero flag", flags, message
-    # @remotePacketId = message[10] << 8 | message[11]
-    if remote.size == 20 # Bad
+
+    if flags & ATEM.PacketFlag.Connect
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
-      @event.once 'ping', (err) => # Bad
+      unless @connected
         @connected = true
         @event.emit 'connect', null, null
-    else if flags & 0x01 || flags & 0x02
+    else if flags & ATEM.PacketFlag.Sync
       @_sendPacket [
         0x80, 0x0C, @sessionId[0], @sessionId[1],
         message[10], message[11], 0x00, 0x00,
