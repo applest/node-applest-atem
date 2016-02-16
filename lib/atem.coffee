@@ -4,6 +4,7 @@ EventEmitter = (require 'events').EventEmitter
 class ATEM
   DEBUG = if process.env['ATEM_DEBUG'] then process.env['ATEM_DEBUG'] == 'true' else false
   DEFAULT_PORT = 9910
+  RECONNECT_INTERVAL = 5000
 
   COMMAND_CONNECT_HELLO = [
     0x10, 0x14, 0x53, 0xAB,
@@ -54,16 +55,27 @@ class ATEM
     audio:
       channels: {}
 
+  connected: false
+  localPackedId: 1
+
   constructor: (local_port = 0) ->
     local_port ||= 1024 + Math.floor(Math.random() * 64511) # 1024-65535
-
-    @localPackedId = 1
 
     @socket = dgram.createSocket 'udp4'
     @socket.on 'message', @_receivePacket
     @socket.bind local_port
     @sessionId = []
     @event = new EventEmitter
+    @event.on 'ping', (err) =>
+      @lastPingedAt = new Date().getTime()
+
+    setInterval( =>
+      if @lastPingedAt + RECONNECT_INTERVAL < new Date().getTime()
+        if @connected
+          @connected = false
+          @event.emit 'disconnect', null, null
+        @connect(@address, @port) if @lastPingedAt + RECONNECT_INTERVAL < new Date().getTime()
+    , RECONNECT_INTERVAL)
 
   connect: (@address, @port = DEFAULT_PORT) ->
     @_sendPacket COMMAND_CONNECT_HELLO
@@ -112,7 +124,8 @@ class ATEM
     if remote.size == 20 # Bad
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
       @event.once 'ping', (err) => # Bad
-        @event.emit 'connect', err, null
+        @connected = true
+        @event.emit 'connect', null, null
     else if flags & 0x01 || flags & 0x02
       @_sendPacket [
         0x80, 0x0C, @sessionId[0], @sessionId[1],
