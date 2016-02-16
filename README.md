@@ -1,17 +1,18 @@
 node-applest-atem [![npm version](https://img.shields.io/npm/v/applest-atem.svg?style=flat-square)](https://www.npmjs.com/package/applest-atem) [![Dependency Status](https://david-dm.org/applest/node-applest-atem.svg?style=flat-square)](https://david-dm.org/applest/node-applest-atem) [![devDependency Status](https://david-dm.org/applest/node-applest-atem/dev-status.svg?style=flat-square)](https://david-dm.org/applest/node-applest-atem#info=devDependencies)
 ========
+
 A module to control Blackmagic Design ATEM Switchers.
 
-Installation
---------
+## Installation
+
 Install this module using npm.
 *Note: this module name is `applest-atem`*
 ```sh
 $ npm install applest-atem --save
 ```
 
-Usage
---------
+## Usage
+
 ```javascript
 var ATEM = require('applest-atem');
 
@@ -30,12 +31,26 @@ atem.on('stateChanged', function(err, state) {
 console.log(atem.state); // or use this.
 ```
 
-Demo
---------
+### Events
+
+- `connect()`
+It will called on receive first ping packet from ATEM.
+
+- `disconnect()`
+It will called on detect that it cannot communicate to ATEM in `RECONNECT_INTERVAL` seconds.
+
+- `ping()`
+It will called on receive ping packet from ATEM at an interval of one second.
+
+- `stateChanged(err, state)`
+It will called on receive state packet from ATEM.
+
+## Demo
+
 See [live-controller](https://github.com/applest/live-controller).
 
-Debug
---------
+## Debug
+
 Set `ATEM_DEBUG=true` environment variable, you can see raw packet.
 ```sh
 $ ATEM_DEBUG=true coffee debug.coffee
@@ -46,8 +61,8 @@ SEND <Buffer 80 0c 80 0f 00 01 00 00 00 41 00 00>
 RECV _ver(12) <Buffer 00 0c 90 60 5f 76 65 72 00 02 00 10>...
 ```
 
-Test
---------
+## Test
+
 This module run tests by mocha.
 You can run the test only if you have ATEM switchers.
 ```sh
@@ -62,8 +77,8 @@ $ ATEM_ADDR=192.168.1.220 ATEM_PORT=9910 cake test
 ### Example
 ![](docs/atem-test.gif)
 
-Contributing
---------
+## Contributing
+
 1. Fork it ( https://github.com/applest/node-applest-atem )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Add your feature and write a test
@@ -71,8 +86,8 @@ Contributing
 5. Push to the branch (`git push origin my-new-feature`)
 6. Create new Pull Request
 
-License
---------
+## License
+
 The MIT License (MIT)
 
 Copyright (c) 2015 Yusei Yamanaka (miyukki)
