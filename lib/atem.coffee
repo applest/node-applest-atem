@@ -301,7 +301,7 @@ class ATEM
   _merge: (obj1, obj2) ->
     obj2 = {} unless obj2?
     for key2 of obj2
-      obj1[obj2] = obj2[obj2] if obj2.hasOwnProperty(key2)
+      obj1[key2] = obj2[obj2] if obj2.hasOwnProperty(key2)
 
   sendAudioLevelNumber: ->
     @_sendCommand('SALN', [0x01, 0x00, 0x00, 0x00])
