@@ -344,6 +344,33 @@ describe 'Atem', ->
 
     after initialize
 
+  describe 'sendAudioLevelNumber', ->
+    initialize = (done) ->
+      sw.sendAudioLevelNumber(false)
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'exists levels', (done) ->
+      sw.once('stateChanged', (err, state) ->
+        expect(state.audio.master.leftLevel).to.exist
+        expect(state.audio.master.rightLevel).to.exist
+        done err, null
+      )
+      sw.sendAudioLevelNumber()
+
+    it 'exists levels', (done) ->
+      async.eachSeries(getAudioChannels(), (channel, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.audio.channels[channel].leftLevel).to.exist
+          expect(state.audio.channels[channel].rightLevel).to.exist
+          next err, null
+        )
+        sw.sendAudioLevelNumber()
+      , done)
+
+    after initialize
+
   after ->
     console.log """\n-------- ATEM Information --------
       ATEM Model: #{sw.state._pin}(#{sw.state.model})
