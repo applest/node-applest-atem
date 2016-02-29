@@ -230,50 +230,29 @@ class ATEM
           gain: @_parseNumber(buffer[0..1])/AUDIO_GAIN_RATE
           rawGain: @_parseNumber(buffer[0..1])
 
-      # Audio Monitor Level
-      # <Buffer 00 03 f2 73 00 03 dc 98 00 7f db a2 00 7f e0 cb> = Master
-      # <Buffer 00 00 03 33 00 20 00 00 43 43 64 50 03 08 00 80> = Info???
-      # <Buffer 00 01 00 02 00 03 00 04 00 05 00 06 04 4d 00 00> = Info?
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 0 0 0
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 1 0 0
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 2 0 0
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 3 0 0
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 4 0 0
-      # <Buffer 00 03 f2 73 00 03 dc 98 00 7f db a2 00 7f e0 cb> 5 0.03083646665054162 258675
-      # <Buffer 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00> 6 0 0 = EXT ?
-      # channel info examples
-      #        0x07D1 = 2001 = MP1
-      #        0x07D2 = 2002 = MP2
-      #        0x03E9 = 1001 = EXT
-      #        0x04b1 = 1201 = RCA
-      # ATEM TVS
-      # 172 = | 4byte | Command code (AMLv) 4byte |
-      #       | 2byte channel num | 2byte channel num| master | zero | channels...
-      when 'AMLv'
-        channel = buffer[0]*256 + buffer[1]
+      when 'AMLv' # Audio Monitor Level
+        numberOfChannels = @_parseNumber(buffer[0..1])
+        channelMappings = []
         offset = 4
-        channels = []
 
         # Master volume
-        for i in [0...3]
-          if i == 0
-            gain = buffer[offset + 1] << 16 |
-                   buffer[offset + 2] << 8 |
-                   buffer[offset + 3]
-            @_merge(@state.audio.master, { level: gain/8388607 })
-          else if i == 2
-            for j in [0...8]
-              number = buffer[offset + j*2] << 8 | buffer[offset + j*2 + 1]
-              channels.push number if number != 0
-          offset = offset + 16
+        for i in [0..1]
+          leftGain = @_parseNumber(buffer[offset+1..offset+3])
+          rightGain = @_parseNumber(buffer[offset+5..offset+7])
+          @_merge(@state.audio.master, { leftLevel: leftGain/8388607, rightLevel: rightGain/8388607 })
+          offset += 16
+
+        # Channel mapping
+        for i in [0...numberOfChannels]
+          channelMappings.push(buffer[offset] << 8 | buffer[offset + 1])
+          offset += 2
 
         # Channels volume
         for i in [0...numberOfChannels]
-          gain = buffer[offset + 1] << 16 |
-                 buffer[offset + 2] << 8 |
-                 buffer[offset + 3]
-          @_merge(@state.audio.channels[i], { level: gain/8388607 })
-          offset = offset + 16
+          leftGain = @_parseNumber(buffer[offset+1..offset+3])
+          rightGain = @_parseNumber(buffer[offset+5..offset+7])
+          @_merge(@state.audio.channels[channelMappings[i]], { leftLevel: leftGain/8388607, rightLevel: rightGain/8388607 })
+          offset += 16
 
   # Convert number from bytes.
   _parseNumber: (bytes) ->
@@ -301,10 +280,7 @@ class ATEM
   _merge: (obj1, obj2) ->
     obj2 = {} unless obj2?
     for key2 of obj2
-      obj1[obj2] = obj2[obj2] if obj2.hasOwnProperty(key2)
-
-  sendAudioLevelNumber: ->
-    @_sendCommand('SALN', [0x01, 0x00, 0x00, 0x00])
+      obj1[key2] = obj2[key2] if obj2.hasOwnProperty(key2)
 
   changeProgramInput: (input) ->
     @_sendCommand('CPgI', [0x00, 0x00, input >> 8, input & 0xFF])
@@ -372,5 +348,8 @@ class ATEM
   # CAMI command structure:    CAMI    [01=buttons, 02=vol, 04=pan (toggle bits)] - [input number, 0-…] - [buttons] - [buttons] - [vol] - [vol] - [pan] - [pan]
   changeAudioChannelState: (channel, status) ->
     @_sendCommand('CAMI', [0x01, 0x00, channel >> 8, channel & 0xFF, status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+  sendAudioLevelNumber: (enable = true) ->
+    @_sendCommand('SALN', [enable, 0x00, 0x00, 0x00])
 
 module.exports = ATEM
