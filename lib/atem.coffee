@@ -51,7 +51,7 @@ class ATEM
     Ack:     0x10
 
   state:
-    tallys : []
+    tallys: []
     channels: {}
     video:
       upstreamKeyNextState: []
@@ -277,6 +277,19 @@ class ATEM
       arr.push(buffer)
     arr
 
+  _numberToBytes: (number, numberOfBytes) ->
+    bytes = []
+    for i in [0...numberOfBytes]
+      shift = numberOfBytes - i - 1
+      bytes.push((number >> (8 * shift)) & 0xFF)
+    bytes
+
+  _stringToBytes: (str) ->
+    bytes = []
+    for i in [0...str.length]
+      bytes.push(str.charCodeAt(i))
+    bytes
+
   _merge: (obj1, obj2) ->
     obj2 = {} unless obj2?
     for key2 of obj2
@@ -351,5 +364,25 @@ class ATEM
 
   sendAudioLevelNumber: (enable = true) ->
     @_sendCommand('SALN', [enable, 0x00, 0x00, 0x00])
+
+  startRecordMacro: (number, name, description) -> # ATEM response with "MRcS"
+    nameLength = name?.length || 0
+    descriptionLength = description?.length || 0
+    bytes = [0x00, number]
+    bytes = bytes.concat(@_numberToBytes(nameLength, 2))
+    bytes = bytes.concat(@_numberToBytes(descriptionLength, 2))
+    bytes = bytes.concat(@_stringToBytes(name)) if nameLength > 0
+    bytes = bytes.concat(@_stringToBytes(description)) if descriptionLength > 0
+
+    @_sendCommand('MSRc', bytes)
+
+  stopRecordMacro: -> # ATEM response with "MRcS"
+    @_sendCommand('MAct', [0xFF, 0xFF, 0x02, 0x81]) # Filling number field with 0xFF means special action
+
+  runMacro: (number) -> # ATEM response with "MRPr"
+    @_sendCommand('MAct', [0x00, number, 0x00, 0x7d])
+
+  deleteMacro: (number) -> # ATEM response with "MPrp"
+    @_sendCommand('MAct', [0x00, number, 0x05, 0x00])
 
 module.exports = ATEM

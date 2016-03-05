@@ -371,6 +371,27 @@ describe 'Atem', ->
 
     after initialize
 
+  describe 'runMacro', ->
+    before (done) ->
+      sw.changeProgramInput(1)
+      setTimeout(done, 100)
+
+    it 'expects run macro', (done) ->
+      sw.startRecordMacro(99, 'Test Macro', 'Hey! This is macro.')
+      sw.changeProgramInput(2)
+      sw.stopRecordMacro()
+      sw.changeProgramInput(1)
+      sw.runMacro(99)
+      setTimeout( ->
+        expect(sw.state.video.programInput).be.eq(2)
+        done null, null
+      , 500)
+
+    after (done) ->
+      sw.deleteMacro(99)
+      sw.changeProgramInput(1)
+      setTimeout(done, 100)
+
   after ->
     console.log """\n-------- ATEM Information --------
       ATEM Model: #{sw.state._pin}(#{sw.state.model})
