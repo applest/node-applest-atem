@@ -45,6 +45,19 @@ It will called on receive ping packet from ATEM at an interval of one second.
 - `stateChanged(err, state)`
 It will called on receive state packet from ATEM.
 
+### File Uploader Usage
+
+```javascript
+var ATEM = require('applest-atem');
+
+var atem = new ATEM();
+atem.connect('192.168.1.220');
+atem.once('stateChanged', function (err, state) { // Delay few seconds from connecting.
+  uploader = new ATEM.FileUploader(atem); // Pass the atem instance.
+  uploader.uploadFromPNGFile('/Users/Sakura/Desktop/FHD.png'); // Pass a path of valid PNG file.
+});
+```
+
 ## Demo
 
 See [live-controller](https://github.com/applest/live-controller).
