@@ -1,8 +1,12 @@
-dgram        =  require 'dgram'
-EventEmitter = (require 'events').EventEmitter
+fs             = require 'fs'
+crypto         = require 'crypto'
+dgram          = require 'dgram'
+{EventEmitter} = require 'events'
+{PNG}          = require 'pngjs'
+
+DEBUG = if process.env['ATEM_DEBUG'] then process.env['ATEM_DEBUG'] == 'true' else false
 
 class ATEM
-  DEBUG = if process.env['ATEM_DEBUG'] then process.env['ATEM_DEBUG'] == 'true' else false
   DEFAULT_PORT = 9910
   RECONNECT_INTERVAL = 5000
 
@@ -68,6 +72,7 @@ class ATEM
 
   constructor: ->
     @event = new EventEmitter
+    @commandEvent = new EventEmitter
     @event.on 'ping', (err) =>
       @lastConnectAt = new Date().getTime()
 
@@ -96,30 +101,29 @@ class ATEM
   once: (name, callback) ->
     @event.once name, callback
 
-  _sendCommand: (command, options) ->
-    message = []
-    message[0] = (20+options.length)/256 | 0x08
-    message[1] = (20+options.length)%256
-    message[2] = @sessionId[0]
-    message[3] = @sessionId[1]
-    message[10] = @localPackedId/256
-    message[11] = @localPackedId%256
-    message[12] = (8+options.length)/256
-    message[13] = (8+options.length)%256
-    message[16] = command.charCodeAt 0
-    message[17] = command.charCodeAt 1
-    message[18] = command.charCodeAt 2
-    message[19] = command.charCodeAt 3
-    for byte, i in options
-      message[20+i] = byte
-    @_sendPacket message
+  _sendCommand: (command, payload) ->
+    payload = new Buffer(payload) unless Buffer.isBuffer(payload)
+    buffer = new Buffer(20 + payload.length)
+    buffer[0] = (20+payload.length)/256 | 0x08
+    buffer[1] = (20+payload.length)%256
+    buffer[2] = @sessionId[0]
+    buffer[3] = @sessionId[1]
+    buffer[10] = @localPackedId/256
+    buffer[11] = @localPackedId%256
+    buffer[12] = (8+payload.length)/256
+    buffer[13] = (8+payload.length)%256
+    buffer[16] = command.charCodeAt 0
+    buffer[17] = command.charCodeAt 1
+    buffer[18] = command.charCodeAt 2
+    buffer[19] = command.charCodeAt 3
+    payload.copy(buffer, 20)
+    @_sendPacket buffer
     @localPackedId++
 
-  _sendPacket: (message) ->
-    buffer = new Buffer message
+  _sendPacket: (buffer) ->
+    buffer = new Buffer(buffer) unless Buffer.isBuffer(buffer)
 
     console.log 'SEND', buffer if DEBUG
-
     @socket.send buffer, 0, buffer.length, @port, @address
 
   _receivePacket: (message, remote) =>
@@ -155,6 +159,8 @@ class ATEM
       @_parseCommand buffer.slice(length)
 
   _setStatus: (name, buffer) ->
+    @commandEvent.emit name, null, buffer
+
     switch name
       when '_ver'
         @state._ver0 = buffer[1]
@@ -376,6 +382,7 @@ class ATEM
 
     @_sendCommand('MSRc', bytes)
 
+  # Macros
   stopRecordMacro: -> # ATEM response with "MRcS"
     @_sendCommand('MAct', [0xFF, 0xFF, 0x02, 0x81]) # Filling number field with 0xFF means special action
 
@@ -385,4 +392,148 @@ class ATEM
   deleteMacro: (number) -> # ATEM response with "MPrp"
     @_sendCommand('MAct', [0x00, number, 0x05, 0x00])
 
+  # File
+  lockMediaPool: (bankIndex, frameIndex) ->
+    payload = [bankIndex/256, bankIndex%256, frameIndex/256, frameIndex%256, 0x00, 0x01, 0x00, 0x46]
+    @_sendCommand('PLCK', payload)
+
+  unlockMediaPool: (bankIndex) ->
+    payload = [bankIndex/256, bankIndex%256, 0x00, 0xbf]
+    @_sendCommand('LOCK', payload)
+
+  # bankIndex: 0x00(Stils), 0x01(Clip1), 0x02(Clip2)
+  fileSendNotice: (id, bankIndex, frameIndex, size, mode = 1) ->
+    payload = []
+    payload[0] = id[0]
+    payload[1] = id[1]
+    payload[2] = bankIndex/256
+    payload[3] = bankIndex%256
+    payload[4] = 0
+    payload[5] = 0
+    payload[6] = frameIndex/256
+    payload[7] = frameIndex%256
+    payload = payload.concat(@_numberToBytes(size, 4))
+    payload[12] = 0
+    payload[13] = mode
+    payload[14] = 0
+    payload[15] = 0
+    @_sendCommand('FTSD', payload)
+
+  sendFileData: (id, buffer) ->
+    payload = new Buffer(buffer.length + 4)
+    payload[0] = id[0]
+    payload[1] = id[1]
+    payload[2] = buffer.length/256
+    payload[3] = buffer.length%256
+    buffer.copy(payload, 4)
+    @_sendCommand('FTDa', payload)
+
+  sendFileDescription: (id, name, hash) ->
+    payload = new Buffer(212)
+    payload.fill(0)
+    payload[0] = id[0]
+    payload[1] = id[1]
+    payload.write(name, 2, 192, 'ascii')
+    hash.copy(payload, 194)
+    # payload.write(194, 16, hash)
+    @_sendCommand('FTFD', payload)
+
+class FileUploader
+  @lastId = null
+  chunkBufferOffset: 0
+
+  constructor: (@atem) ->
+    console.log 'Must set atem' unless @atem
+
+  uploadFromPNGFile: (file, bankIndex, frameIndex) ->
+    @uploadFromPNGBuffer(fs.readFileSync(file))
+
+  uploadFromPNGBuffer: (pngBuffer, bankIndex = 0, frameIndex = 0) ->
+    # Check already used this uploader
+    new PNG(filterType: 4).parse(pngBuffer, (err, parsed) =>
+      if err?
+        console.log 'PNG Parse Error!', err
+        return
+
+      if @chunkBufferOffset != 0
+        console.log 'Already Used Instance!'
+        return
+
+      @id = crypto.randomBytes(2) while !@id? || FileUploader.lastId == @id
+      @lastId = @id
+      @width = parsed.width
+      @height = parsed.height
+      @buffer = @convertPNGToYUV422(parsed.width, parsed.height, parsed.data)
+
+      hashObject = crypto.createHash('md5')
+      hashObject.update(@buffer)
+      @hash = hashObject.digest()
+
+      @atem.commandEvent.once 'LKST', (err, payload) => # lock status
+        console.log '=> lock data', payload if DEBUG
+        lockedBankIndex = payload[1]
+        locked = payload[2] == 1
+        @atem.fileSendNotice(@id, bankIndex, frameIndex, @buffer.length) if lockedBankIndex == bankIndex && locked
+      @atem.commandEvent.once 'FTCD', (err, payload) =>
+        console.log '=> send description', payload if DEBUG
+        @atem.sendFileDescription(@id, '', @hash)
+      @atem.commandEvent.on 'FTCD', (err, payload) => # continue data
+        console.log '=> continue data', payload, @chunkBufferOffset, @chunkBufferSize, @chunkCount, @buffer.length - @chunkBufferOffset  if DEBUG
+        @chunkCount = payload[9]
+        @chunkBufferSize = @atem._parseNumber(payload[6..7]) - 4
+        clearInterval(@chunkIntervalId) if @chunkIntervalId?
+        @chunkIntervalId =
+          setInterval( =>
+            clearInterval(@chunkIntervalId) if --@chunkCount == 0
+            if @chunkBufferOffset + @chunkBufferSize > @buffer.length
+              @atem.sendFileData(@id, @buffer.slice(@chunkBufferOffset, @buffer.length))
+              clearInterval(@chunkIntervalId)
+            else
+              @atem.sendFileData(@id, @buffer.slice(@chunkBufferOffset, @chunkBufferOffset + @chunkBufferSize))
+            @chunkBufferOffset += @chunkBufferSize
+          , 1)
+      @atem.commandEvent.once 'FTDC', (err, payload) => # data close
+        console.log '=> data close', payload if DEBUG
+        @atem.unlockMediaPool(bankIndex)
+      @atem.commandEvent.once 'FTDE', (err, payload) => # data error
+        console.log '=> data error', payload if DEBUG
+
+      @atem.lockMediaPool(bankIndex, frameIndex)
+    )
+
+  # Convert pixels in pairs for 4:2:2 compression
+  # From https://github.com/petersimonsson/libqatemcontrol
+  convertPNGToYUV422: (width, height, data) ->
+    buffer = new Buffer(width * height * 4)
+
+    i = 0
+    while i < width * height * 4
+      r1 = data[i+0]
+      g1 = data[i+1]
+      b1 = data[i+2]
+      a1 = data[i+3] * 3.7
+      r2 = data[i+4]
+      g2 = data[i+5]
+      b2 = data[i+6]
+      a2 = data[i+7] * 3.7
+
+      y1 = (((66  * r1 + 129 * g1 +  25 * b1 + 128) >> 8) + 16 ) * 4 - 1
+      u1 = (((-38 * r1 -  74 * g1 + 112 * b1 + 128) >> 8) + 128) * 4 - 1
+      y2 = (((66  * r2 + 129 * g2 +  25 * b2 + 128) >> 8) + 16 ) * 4 - 1
+      v2 = (((112 * r2 -  94 * g2 -  18 * b2 + 128) >> 8) + 128) * 4 - 1
+
+      buffer[i+0] = a1 >> 4
+      buffer[i+1] = ((a1 & 0x0f) << 4) | (u1 >> 6)
+      buffer[i+2] = ((u1 & 0x3f) << 2) | (y1 >> 8)
+      buffer[i+3] = y1 & 0xff
+      buffer[i+4] = a2 >> 4
+      buffer[i+5] = ((a2 & 0x0f) << 4) | (v2 >> 6)
+      buffer[i+6] = ((v2 & 0x3f) << 2) | (y2 >> 8)
+      buffer[i+7] = y2 & 0xff
+
+      i = i + 8
+
+    buffer
+
 module.exports = ATEM
+module.exports.FileUploader = FileUploader
