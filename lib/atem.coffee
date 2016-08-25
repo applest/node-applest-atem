@@ -52,7 +52,7 @@ class ATEM
     Connect: 0x02
     Repeat:  0x04
     Unknown: 0x08
-    Ack:     0x10
+    Ack:     0x16
 
   state:
     tallys: []
