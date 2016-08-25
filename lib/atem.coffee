@@ -70,6 +70,8 @@ class ATEM
       downstreamKeyTie: []
       auxs: {}
     audio:
+      hasMonitor: null
+      numberOfChannels: null
       channels: {}
 
   connectionState: ATEM.ConnectionState.Closed
@@ -244,6 +246,10 @@ class ATEM
       when 'AuxS' # Auxially Setting
         aux = buffer[0]
         @state.video.auxs[aux] = @_parseNumber(buffer[2..3])
+
+      when '_AMC' # Audio Mixer Config
+        @state.audio.numberOfChannels = @_parseNumber(buffer[0])
+        @state.audio.hasMonitor = buffer[1] == 1
 
       when 'AMIP' # Audio Monitor Input Position
         channel = @_parseNumber buffer[0..1]
