@@ -47,11 +47,17 @@ class ATEM
     Program: 0x01
     Preview: 0x02
 
+  @ConnectionState =
+    None:        0x00
+    SynSent:     0x01
+    Established: 0x02
+    Closed:      0x03
+
   @PacketFlag =
     Sync:    0x01
     Connect: 0x02
     Repeat:  0x04
-    Unknown: 0x08
+    Error:   0x08
     Ack:     0x16
 
   state:
@@ -66,9 +72,10 @@ class ATEM
     audio:
       channels: {}
 
-  connected: false
+  connectionState: ATEM.ConnectionState.Closed
   localPackedId: 1
   sessionId: []
+  echoData: []
 
   constructor: ->
     @event = new EventEmitter
@@ -78,8 +85,8 @@ class ATEM
 
     setInterval( =>
       return if @lastConnectAt + RECONNECT_INTERVAL > new Date().getTime()
-      if @connected
-        @connected = false
+      if @connectionState == ATEM.ConnectionState.Established
+        @connectionState = ATEM.ConnectionState.Closed
         @event.emit 'disconnect', null, null
       @localPackedId = 1
       @sessionId = []
@@ -94,6 +101,7 @@ class ATEM
     @socket.bind local_port
 
     @_sendPacket COMMAND_CONNECT_HELLO
+    @connectionState = ATEM.ConnectionState.SynSent
 
   on: (name, callback) ->
     @event.on name, callback
@@ -101,9 +109,22 @@ class ATEM
   once: (name, callback) ->
     @event.once name, callback
 
+  _sendAck: ->
+    buffer = new Buffer(12)
+    buffer.fill(0)
+    buffer[0] = 0x80
+    buffer[1] = 0x0C
+    buffer[2] = @sessionId[0]
+    buffer[3] = @sessionId[1]
+    buffer[4] = @echoData[0]
+    buffer[5] = @echoData[1]
+    buffer[9] = 0x41
+    @_sendPacket buffer
+
   _sendCommand: (command, payload) ->
     payload = new Buffer(payload) unless Buffer.isBuffer(payload)
     buffer = new Buffer(20 + payload.length)
+    buffer.fill(0)
     buffer[0] = (20+payload.length)/256 | 0x08
     buffer[1] = (20+payload.length)%256
     buffer[2] = @sessionId[0]
@@ -129,30 +150,37 @@ class ATEM
   _receivePacket: (message, remote) =>
     length = ((message[0] & 0x07) << 8) | message[1]
     return if length != remote.size
+
+    console.log 'RECV', message if DEBUG
     flags = message[0] >> 3
     @sessionId = [message[2], message[3]]
+    @echoData = [message[10], message[11]]
 
+    # Send hello answer packet when receive connect flags
     if flags & ATEM.PacketFlag.Connect
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
-      unless @connected
-        @connected = true
-        @event.emit 'connect', null, null
-    else if flags & ATEM.PacketFlag.Sync
-      @_sendPacket [
-        0x80, 0x0C, @sessionId[0], @sessionId[1],
-        message[10], message[11], 0x00, 0x00,
-        0x00, 0x41, 0x00, 0x00
-      ]
+
+    # Send ping packet, Emit 'ping' event after sent
+    if flags & ATEM.PacketFlag.Ack && @connectionState == ATEM.ConnectionState.Established
+      @_sendAck()
       @event.emit 'ping', null, null
-    if remote.size > 12 && remote.size != 20
+
+    # Parse commands, Emit 'stateChanged' event after parse
+    if flags & ATEM.PacketFlag.Sync && length > 12
       @_parseCommand message.slice(12)
       @event.emit 'stateChanged', null, @state
+
+    # Send ping packet, Emit 'connect' event after receive all stats
+    if flags & ATEM.PacketFlag.Sync && length == 12 && @connectionState == ATEM.ConnectionState.SynSent
+      @connectionState = ATEM.ConnectionState.Established
+      @event.emit 'connect', null, null
+      @_sendAck()
 
   _parseCommand: (buffer) ->
     length = @_parseNumber(buffer[0..1])
     name = @_parseString(buffer[4..7])
 
-    console.log 'RECV', "#{name}(#{length})", buffer.slice(0, length) if DEBUG
+    console.log 'COMMAND', "#{name}(#{length})", buffer.slice(0, length) if DEBUG
 
     @_setStatus name, buffer.slice(0, length).slice(8)
     if buffer.length > length
