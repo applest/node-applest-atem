@@ -61,11 +61,28 @@ class ATEM
     Ack:     0x16
 
   state:
+    topology:
+      numberOfMEs: null
+      numberOfSources: null
+      numberOfColorGenerators: null
+      numberOfAUXs: null
+      numberOfDownstreamKeys: null
+      numberOfStingers: null
+      numberOfDVEs: null
+      numberOfSuperSources: null
     tallys: []
     channels: {}
     video:
-      upstreamKeyNextState: []
-      upstreamKeyState: []
+      ME: [
+        # programInput: null
+        # previewInput: null
+        # transitionPreview: null
+        # transitionPosition: null
+        # transitionFrameCount: null
+        # fadeToBlack: null
+        # upstreamKeyNextState: []
+        # upstreamKeyState: []
+      ]
       downstreamKeyOn: []
       downstreamKeyTie: []
       auxs: {}
@@ -79,7 +96,9 @@ class ATEM
   sessionId: []
   remotePacketId: []
 
-  constructor: ->
+  constructor: (options = {}) ->
+    @forceOldStyle = options.forceOldStyle || false
+
     @event = new EventEmitter
     @commandEvent = new EventEmitter
     @event.on 'ping', (err) =>
@@ -187,6 +206,10 @@ class ATEM
     if buffer.length > length
       @_parseCommand buffer.slice(length)
 
+    if @forceOldStyle # Support 0.1.x
+      for key, value of @state.video.ME[0]
+        @state.video[key] = value
+
   _setStatus: (name, buffer) ->
     @commandEvent.emit name, null, buffer
 
@@ -199,6 +222,25 @@ class ATEM
         @state._pin = @_parseString(buffer)
         @state.model = buffer[40] # XXX: is this sure?
 
+      when '_top'
+        @state.topology.numberOfMEs = buffer[0]
+        @state.topology.numberOfSources = buffer[1]
+        @state.topology.numberOfColorGenerators = buffer[2]
+        @state.topology.numberOfAUXs = buffer[3]
+        @state.topology.numberOfDownstreamKeys = buffer[4]
+        @state.topology.numberOfStingers = buffer[5]
+        @state.topology.numberOfDVEs = buffer[6]
+        @state.topology.numberOfSuperSources = buffer[7]
+        for me in [0...@state.topology.numberOfMEs]
+          @state.video.ME[me] = {
+            upstreamKeyState: []
+            upstreamKeyNextState: []
+          }
+
+      when '_MeC'
+        me = buffer[0]
+        @state.video.ME[me].numberOfKeyers = buffer[1]
+
       when 'InPr'
         channel = @_parseNumber(buffer[0..1])
         @state.channels[channel] =
@@ -206,38 +248,42 @@ class ATEM
           label: @_parseString(buffer[22..25])
 
       when 'PrgI'
-        @state.video.programInput = @_parseNumber(buffer[2..3])
+        me = buffer[0]
+        @state.video.ME[me].programInput = @_parseNumber(buffer[2..3])
 
       when 'PrvI'
-        @state.video.previewInput = @_parseNumber(buffer[2..3])
+        me = buffer[0]
+        @state.video.ME[me].previewInput = @_parseNumber(buffer[2..3])
 
       when 'TrPr'
-        @state.video.transitionPreview = if buffer[1] > 0 then true else false
+        me = buffer[0]
+        @state.video.ME[me].transitionPreview = if buffer[1] > 0 then true else false
 
       when 'TrPs'
-        @state.video.transitionPosition = @_parseNumber(buffer[4..5])/10000 # 0 - 10000
-        @state.video.transitionFrameCount = buffer[2] # 0 - 30
+        me = buffer[0]
+        @state.video.ME[me].transitionPosition = @_parseNumber(buffer[4..5])/10000 # 0 - 10000
+        @state.video.ME[me].transitionFrameCount = buffer[2] # 0 - 30
+
+      when 'FtbS' # Fade To Black Setting
+        me = buffer[0]
+        @state.video.ME[me].fadeToBlack = if buffer[1] > 0 then true else false
 
       when 'TrSS'
-        @state.video.transitionStyle = @_parseNumber(buffer[0..1])
-        @state.video.upstreamKeyNextBackground = (buffer[2] >> 0 & 1) == 0x01
-        @state.video.upstreamKeyNextState[0] = (buffer[2] >> 1 & 1) == 0x01
-        if @state.model != ATEM.Model.TVS && @state.model != ATEM.Model.PS4K
-          @state.video.upstreamKeyNextState[1] = (buffer[2] >> 2 & 1) == 0x01
-          @state.video.upstreamKeyNextState[2] = (buffer[2] >> 3 & 1) == 0x01
-          @state.video.upstreamKeyNextState[3] = (buffer[2] >> 4 & 1) == 0x01
+        me = buffer[0]
+        @state.video.ME[me].transitionStyle = buffer[1]
+        @state.video.ME[me].upstreamKeyNextBackground = (buffer[2] >> 0 & 1) == 0x01
+        for i in [0...@state.video.ME[me].numberOfKeyers]
+          @state.video.ME[me].upstreamKeyNextState[i] = (buffer[2] >> (i+1) & 1) == 0x01
+
+      when 'KeOn'
+        me = buffer[0]
+        @state.video.ME[me].upstreamKeyState[buffer[1]] = if buffer[2] == 1 then true else false
 
       when 'DskS'
         @state.video.downstreamKeyOn[buffer[0]] = if buffer[1] == 1 then true else false
 
       when 'DskP'
         @state.video.downstreamKeyTie[buffer[0]] = if buffer[1] == 1 then true else false
-
-      when 'KeOn'
-        @state.video.upstreamKeyState[buffer[1]] = if buffer[2] == 1 then true else false
-
-      when 'FtbS' # Fade To Black Setting
-        @state.video.fadeToBlack = if buffer[1] > 0 then true else false
 
       when 'TlIn' # Tally Input
         @state.tallys = @_bufferToArray(buffer[2..])
@@ -334,33 +380,33 @@ class ATEM
     for key2 of obj2
       obj1[key2] = obj2[key2] if obj2.hasOwnProperty(key2)
 
-  changeProgramInput: (input) ->
+  changeProgramInput: (input) -> # me
     @_sendCommand('CPgI', [0x00, 0x00, input >> 8, input & 0xFF])
 
-  changePreviewInput: (input) ->
+  changePreviewInput: (input) -> # me
     @_sendCommand('CPvI', [0x00, 0x00, input >> 8, input & 0xFF])
 
-  changeAuxInput: (aux, input) ->
-    @_sendCommand('CAuS', [0x01, aux, input >> 8, input & 0xFF])
-
-  fadeToBlack: ->
+  fadeToBlack: -> # me
     @_sendCommand('FtbA', [0x00, 0x02, 0x58, 0x99])
 
-  autoTransition: ->
+  autoTransition: -> # me
     @_sendCommand('DAut', [0x00, 0x00, 0x00, 0x00])
 
-  cutTransition: ->
+  cutTransition: -> # me
     @_sendCommand('DCut', [0x00, 0xef, 0xbf, 0x5f])
 
-  changeTransitionPosition: (position) ->
+  changeTransitionPosition: (position) -> # me
     @_sendCommand('CTPs', [0x00, 0xe4, position/256, position%256])
     @_sendCommand('CTPs', [0x00, 0xf6, 0x00, 0x00]) if position == 10000
 
-  changeTransitionPreview: (state) ->
+  changeTransitionPreview: (state) -> # me
     @_sendCommand('CTPr', [0x00, state, 0x00, 0x00])
 
-  changeTransitionType: (type) ->
+  changeTransitionType: (type) -> # me
     @_sendCommand('CTTp', [0x01, 0x00, type, 0x02])
+
+  changeAuxInput: (aux, input) ->
+    @_sendCommand('CAuS', [0x01, aux, input >> 8, input & 0xFF])
 
   changeDownstreamKeyOn: (number, state) ->
     @_sendCommand('CDsL', [number, state, 0xff, 0xff])
