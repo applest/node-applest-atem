@@ -210,10 +210,10 @@ describe 'Atem', ->
       async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
         async.eachSeries(types, (type, next) ->
           sw.once('stateChanged', (err, state) ->
-            expect(state.video.ME[0].transitionStyle).be.eq(type)
+            expect(state.video.ME[me].transitionStyle).be.eq(type)
             next err, null
           )
-          sw.changeTransitionType(type)
+          sw.changeTransitionType(type, me)
         , nextME)
       done)
 
