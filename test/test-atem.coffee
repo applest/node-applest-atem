@@ -31,7 +31,7 @@ describe 'Atem', ->
     it 'expects change all camera input', (done) ->
       async.eachSeries(getCameraInputs(), (input, next) ->
         sw.once('stateChanged', (err, state) ->
-          expect(state.video.programInput).be.eq(input)
+          expect(state.video.ME[0].programInput).be.eq(input)
           next err, null
         )
         sw.changeProgramInput(input)
@@ -45,7 +45,7 @@ describe 'Atem', ->
     it 'expects change all camera input', (done) ->
       async.eachSeries(getCameraInputs(), (input, next) ->
         sw.once('stateChanged', (err, state) ->
-          expect(state.video.previewInput).be.eq(input)
+          expect(state.video.ME[0].previewInput).be.eq(input)
           next err, null
         )
         sw.changePreviewInput(input)
@@ -72,19 +72,19 @@ describe 'Atem', ->
 
   describe 'fadeToBlack', ->
     before (done) ->
-      sw.fadeToBlack() if sw.state.video.fadeToBlack
+      sw.fadeToBlack() if sw.state.video.ME[0].fadeToBlack
       setTimeout(done, 1500)
 
     it 'expects fade to black', (done) ->
       setTimeout( ->
-        expect(sw.state.video.fadeToBlack).be.true
+        expect(sw.state.video.ME[0].fadeToBlack).be.true
         done null, null
       , 1500)
       sw.fadeToBlack()
 
     it 'expects restore fade to black', (done) ->
       setTimeout( ->
-        expect(sw.state.video.fadeToBlack).be.false
+        expect(sw.state.video.ME[0].fadeToBlack).be.false
         done null, null
       , 1500)
       sw.fadeToBlack()
@@ -97,13 +97,13 @@ describe 'Atem', ->
       setTimeout(done, 100)
 
     it 'expects set program and preview input', ->
-      expect(sw.state.video.programInput).be.eq(1)
-      expect(sw.state.video.previewInput).be.eq(2)
+      expect(sw.state.video.ME[0].programInput).be.eq(1)
+      expect(sw.state.video.ME[0].previewInput).be.eq(2)
 
     it 'expects swap program and preview input', (done) ->
       setTimeout( ->
-        expect(sw.state.video.programInput).be.eq(2)
-        expect(sw.state.video.previewInput).be.eq(1)
+        expect(sw.state.video.ME[0].programInput).be.eq(2)
+        expect(sw.state.video.ME[0].previewInput).be.eq(1)
         done null, null
       , 1500)
       sw.autoTransition()
@@ -115,13 +115,13 @@ describe 'Atem', ->
       setTimeout(done, 100)
 
     it 'expects set program and preview input', ->
-      expect(sw.state.video.programInput).be.eq(1)
-      expect(sw.state.video.previewInput).be.eq(2)
+      expect(sw.state.video.ME[0].programInput).be.eq(1)
+      expect(sw.state.video.ME[0].previewInput).be.eq(2)
 
     it 'expects swap program and preview input', (done) ->
       sw.once('stateChanged', (err, state) ->
-        expect(state.video.programInput).be.eq(2)
-        expect(state.video.previewInput).be.eq(1)
+        expect(state.video.ME[0].programInput).be.eq(2)
+        expect(state.video.ME[0].previewInput).be.eq(1)
         done err, null
       )
       sw.cutTransition()
@@ -135,7 +135,7 @@ describe 'Atem', ->
 
     it 'expects change transition position', (done) ->
       sw.once('stateChanged', (err, state) ->
-        expect(state.video.transitionPosition).be.eq(0.5)
+        expect(state.video.ME[0].transitionPosition).be.eq(0.5)
         done err, null
       )
       sw.changeTransitionPosition(5000)
@@ -144,17 +144,17 @@ describe 'Atem', ->
 
   describe 'changeTransitionPreview', ->
     initialize = (done) ->
-      sw.changeTransitionPreview(false) if sw.state.video.transitionPreview
+      sw.changeTransitionPreview(false) if sw.state.video.ME[0].transitionPreview
       setTimeout(done, 100)
 
     before initialize
 
     it 'expects false', ->
-      expect(sw.state.video.transitionPreview).be.false
+      expect(sw.state.video.ME[0].transitionPreview).be.false
 
     it 'expects true when enable', (done) ->
       sw.once('stateChanged', (err, state) ->
-        expect(state.video.transitionPreview).be.true
+        expect(state.video.ME[0].transitionPreview).be.true
         done err, null
       )
       sw.changeTransitionPreview(true)
@@ -174,7 +174,7 @@ describe 'Atem', ->
 
       async.eachSeries(types, (type, next) ->
         sw.once('stateChanged', (err, state) ->
-          expect(state.video.transitionStyle).be.eq(type)
+          expect(state.video.ME[0].transitionStyle).be.eq(type)
           next err, null
         )
         sw.changeTransitionType(type)
@@ -224,7 +224,7 @@ describe 'Atem', ->
 
   describe 'changeUpstreamKeyState', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.upstreamKeyState, (state, index, next) ->
+      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
         sw.changeUpstreamKeyState(index, false)
         next null, null
       )
@@ -233,9 +233,9 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.upstreamKeyState, (state, index, next) ->
+      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
-          expect(state.video.upstreamKeyState[index]).be.true
+          expect(state.video.ME[0].upstreamKeyState[index]).be.true
           next err, null
         )
         sw.changeUpstreamKeyState(index, true)
@@ -253,7 +253,7 @@ describe 'Atem', ->
 
     it 'expects change', (done) ->
       sw.once('stateChanged', (err, state) ->
-        expect(state.video.upstreamKeyNextBackground).be.false
+        expect(state.video.ME[0].upstreamKeyNextBackground).be.false
         done err, null
       )
       sw.changeUpstreamKeyNextState(0, true)
@@ -263,7 +263,7 @@ describe 'Atem', ->
 
   describe 'changeUpstreamKeyNextState', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.upstreamKeyNextState, (state, index, next) ->
+      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
         sw.changeUpstreamKeyNextState(index, false)
         next null, null
       )
@@ -272,9 +272,9 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.upstreamKeyNextState, (state, index, next) ->
+      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
         setTimeout( -> # temp
-          expect(sw.state.video.upstreamKeyNextState[index]).be.true
+          expect(sw.state.video.ME[0].upstreamKeyNextState[index]).be.true
           next null, null
         , 100)
         sw.changeUpstreamKeyNextState(index, true)
@@ -384,7 +384,7 @@ describe 'Atem', ->
       sw.changeProgramInput(1)
       sw.runMacro(99)
       setTimeout( ->
-        expect(sw.state.video.programInput).be.eq(2)
+        expect(sw.state.video.ME[0].programInput).be.eq(2)
         done null, null
       , 500)
 
