@@ -24,32 +24,46 @@ describe 'Atem', ->
     , [])
 
   describe 'changeProgramInput', ->
-    before (done) ->
-      sw.changeProgramInput(1)
+    initialize = (done) ->
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeProgramInput(1, me)
       setTimeout(done, 100)
 
+    before initialize
+
     it 'expects change all camera input', (done) ->
-      async.eachSeries(getCameraInputs(), (input, next) ->
-        sw.once('stateChanged', (err, state) ->
-          expect(state.video.ME[0].programInput).be.eq(input)
-          next err, null
-        )
-        sw.changeProgramInput(input)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        async.eachSeries(getCameraInputs(), (input, next) ->
+          sw.once('stateChanged', (err, state) ->
+            expect(state.video.ME[me].programInput).be.eq(input)
+            next err, null
+          )
+          sw.changeProgramInput(input, me)
+        , nextME)
       , done)
+
+    after initialize
 
   describe 'changePreviewInput', ->
-    before (done) ->
-      sw.changePreviewInput(1)
+    initialize = (done) ->
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changePreviewInput(1, me)
       setTimeout(done, 100)
 
+    before initialize
+
     it 'expects change all camera input', (done) ->
-      async.eachSeries(getCameraInputs(), (input, next) ->
-        sw.once('stateChanged', (err, state) ->
-          expect(state.video.ME[0].previewInput).be.eq(input)
-          next err, null
-        )
-        sw.changePreviewInput(input)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        async.eachSeries(getCameraInputs(), (input, next) ->
+          sw.once('stateChanged', (err, state) ->
+            expect(state.video.ME[me].previewInput).be.eq(input)
+            next err, null
+          )
+          sw.changePreviewInput(input, me)
+        , nextME)
       , done)
+
+    after initialize
 
   describe 'changeAuxInput', ->
     before (done) ->
@@ -72,98 +86,119 @@ describe 'Atem', ->
 
   describe 'fadeToBlack', ->
     before (done) ->
-      sw.fadeToBlack() if sw.state.video.ME[0].fadeToBlack
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.fadeToBlack(me) if sw.state.video.ME[me].fadeToBlack
       setTimeout(done, 1500)
 
     it 'expects fade to black', (done) ->
-      setTimeout( ->
-        expect(sw.state.video.ME[0].fadeToBlack).be.true
-        done null, null
-      , 1500)
-      sw.fadeToBlack()
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        setTimeout( ->
+          expect(sw.state.video.ME[me].fadeToBlack).be.true
+          nextME null, null
+        , 1500)
+        sw.fadeToBlack(me)
+      , done)
 
     it 'expects restore fade to black', (done) ->
-      setTimeout( ->
-        expect(sw.state.video.ME[0].fadeToBlack).be.false
-        done null, null
-      , 1500)
-      sw.fadeToBlack()
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        setTimeout( ->
+          expect(sw.state.video.ME[me].fadeToBlack).be.false
+          nextME null, null
+        , 1500)
+        sw.fadeToBlack(me)
+      , done)
 
   describe 'autoTransition', ->
     before (done) ->
-      sw.changeTransitionType(ATEM.TransitionStyle.MIX)
-      sw.changeProgramInput(1)
-      sw.changePreviewInput(2)
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeTransitionType(ATEM.TransitionStyle.MIX, me)
+        sw.changeProgramInput(1, me)
+        sw.changePreviewInput(2, me)
       setTimeout(done, 100)
 
     it 'expects set program and preview input', ->
-      expect(sw.state.video.ME[0].programInput).be.eq(1)
-      expect(sw.state.video.ME[0].previewInput).be.eq(2)
+      for me in [0...sw.state.topology.numberOfMEs]
+        expect(sw.state.video.ME[me].programInput).be.eq(1)
+        expect(sw.state.video.ME[me].previewInput).be.eq(2)
 
     it 'expects swap program and preview input', (done) ->
-      setTimeout( ->
-        expect(sw.state.video.ME[0].programInput).be.eq(2)
-        expect(sw.state.video.ME[0].previewInput).be.eq(1)
-        done null, null
-      , 1500)
-      sw.autoTransition()
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        setTimeout( ->
+          expect(sw.state.video.ME[me].programInput).be.eq(2)
+          expect(sw.state.video.ME[me].previewInput).be.eq(1)
+          nextME null, null
+        , 1500)
+        sw.autoTransition(me)
+      , done)
 
   describe 'cutTransition', ->
     before (done) ->
-      sw.changeProgramInput(1)
-      sw.changePreviewInput(2)
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeProgramInput(1, me)
+        sw.changePreviewInput(2, me)
       setTimeout(done, 100)
 
     it 'expects set program and preview input', ->
-      expect(sw.state.video.ME[0].programInput).be.eq(1)
-      expect(sw.state.video.ME[0].previewInput).be.eq(2)
+      for me in [0...sw.state.topology.numberOfMEs]
+        expect(sw.state.video.ME[me].programInput).be.eq(1)
+        expect(sw.state.video.ME[me].previewInput).be.eq(2)
 
     it 'expects swap program and preview input', (done) ->
-      sw.once('stateChanged', (err, state) ->
-        expect(state.video.ME[0].programInput).be.eq(2)
-        expect(state.video.ME[0].previewInput).be.eq(1)
-        done err, null
-      )
-      sw.cutTransition()
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.ME[me].programInput).be.eq(2)
+          expect(state.video.ME[me].previewInput).be.eq(1)
+          nextME err, null
+        )
+        sw.cutTransition(me)
+      , done)
 
   describe 'changeTransitionPosition', ->
     initialize = (done) ->
-      sw.changeTransitionPosition(0)
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeTransitionPosition(0, me)
       setTimeout(done, 100)
 
     before initialize
 
     it 'expects change transition position', (done) ->
-      sw.once('stateChanged', (err, state) ->
-        expect(state.video.ME[0].transitionPosition).be.eq(0.5)
-        done err, null
-      )
-      sw.changeTransitionPosition(5000)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.ME[me].transitionPosition).be.eq(0.5)
+          nextME err, null
+        )
+        sw.changeTransitionPosition(5000, me)
+      , done)
 
     after initialize
 
   describe 'changeTransitionPreview', ->
     initialize = (done) ->
-      sw.changeTransitionPreview(false) if sw.state.video.ME[0].transitionPreview
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeTransitionPreview(false, me) if sw.state.video.ME[me].transitionPreview
       setTimeout(done, 100)
 
     before initialize
 
     it 'expects false', ->
-      expect(sw.state.video.ME[0].transitionPreview).be.false
+      for me in [0...sw.state.topology.numberOfMEs]
+        expect(sw.state.video.ME[me].transitionPreview).be.false
 
     it 'expects true when enable', (done) ->
-      sw.once('stateChanged', (err, state) ->
-        expect(state.video.ME[0].transitionPreview).be.true
-        done err, null
-      )
-      sw.changeTransitionPreview(true)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.ME[me].transitionPreview).be.true
+          nextME err, null
+        )
+        sw.changeTransitionPreview(true, me)
+      , done)
 
     after initialize
 
   describe 'changeTransitionType', ->
     before (done) ->
-      sw.changeTransitionType(ATEM.TransitionStyle.DIP)
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeTransitionType(ATEM.TransitionStyle.DIP, me)
       setTimeout(done, 100)
 
     it 'expects change all transition type', (done) ->
@@ -172,13 +207,15 @@ describe 'Atem', ->
       else
         (v for k, v of ATEM.TransitionStyle)
 
-      async.eachSeries(types, (type, next) ->
-        sw.once('stateChanged', (err, state) ->
-          expect(state.video.ME[0].transitionStyle).be.eq(type)
-          next err, null
-        )
-        sw.changeTransitionType(type)
-      , done)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        async.eachSeries(types, (type, next) ->
+          sw.once('stateChanged', (err, state) ->
+            expect(state.video.ME[0].transitionStyle).be.eq(type)
+            next err, null
+          )
+          sw.changeTransitionType(type)
+        , nextME)
+      done)
 
   describe 'changeDownstreamKeyOn', ->
     initialize = (done) ->
@@ -224,60 +261,65 @@ describe 'Atem', ->
 
   describe 'changeUpstreamKeyState', ->
     initialize = (done) ->
-      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
-        sw.changeUpstreamKeyState(index, false)
-        next null, null
-      )
+      for me in [0...sw.state.topology.numberOfMEs]
+        for keyer in [0...sw.state.video.ME[me].numberOfKeyers]
+          sw.changeUpstreamKeyState(keyer, false, me)
       setTimeout(done, 100)
 
     before initialize
 
     it 'expects change', (done) ->
-      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
-        sw.once('stateChanged', (err, state) ->
-          expect(state.video.ME[0].upstreamKeyState[index]).be.true
-          next err, null
-        )
-        sw.changeUpstreamKeyState(index, true)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        async.eachOfSeries(sw.state.video.ME[me].upstreamKeyState, (state, index, next) ->
+          sw.once('stateChanged', (err, state) ->
+            expect(state.video.ME[me].upstreamKeyState[index]).be.true
+            next err, null
+          )
+          sw.changeUpstreamKeyState(index, true, me)
+        , nextME)
       , done)
 
     after initialize
 
   describe 'changeUpstreamKeyNextBackground', ->
     initialize = (done) ->
-      sw.changeUpstreamKeyNextState(0, false)
-      sw.changeUpstreamKeyNextBackground(true)
+      for me in [0...sw.state.topology.numberOfMEs]
+        sw.changeUpstreamKeyNextState(0, false, me)
+        sw.changeUpstreamKeyNextBackground(true, me)
       setTimeout(done, 100)
 
     before initialize
 
     it 'expects change', (done) ->
-      sw.once('stateChanged', (err, state) ->
-        expect(state.video.ME[0].upstreamKeyNextBackground).be.false
-        done err, null
-      )
-      sw.changeUpstreamKeyNextState(0, true)
-      sw.changeUpstreamKeyNextBackground(false)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.ME[me].upstreamKeyNextBackground).be.false
+          nextME err, null
+        )
+        sw.changeUpstreamKeyNextState(0, true, me)
+        sw.changeUpstreamKeyNextBackground(false, me)
+      , done)
 
     after initialize
 
   describe 'changeUpstreamKeyNextState', ->
     initialize = (done) ->
-      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
-        sw.changeUpstreamKeyNextState(index, false)
-        next null, null
-      )
+      for me in [0...sw.state.topology.numberOfMEs]
+        for keyer in [0...sw.state.video.ME[me].numberOfKeyers]
+          sw.changeUpstreamKeyNextState(keyer, false, me)
       setTimeout(done, 1000)
 
     before initialize
 
     it 'expects change', (done) ->
-      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
-        setTimeout( -> # temp
-          expect(sw.state.video.ME[0].upstreamKeyNextState[index]).be.true
-          next null, null
-        , 100)
-        sw.changeUpstreamKeyNextState(index, true)
+      async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
+        async.eachOfSeries(sw.state.video.ME[me].upstreamKeyNextState, (state, index, next) ->
+          sw.once('stateChanged', (err, state) ->
+            expect(sw.state.video.ME[me].upstreamKeyNextState[index]).be.true
+            next err, null
+          )
+          sw.changeUpstreamKeyNextState(index, true, me)
+        , nextME)
       , done)
 
     after initialize
