@@ -54,8 +54,8 @@ class ATEM
     Closed:      0x03
 
   @PacketFlag =
-    Sync:    0x01
-    Connect: 0x02
+    Sync:    0x01 # Ack called by Skaarhoj
+    Connect: 0x02 # Init called by Skaarhoj
     Repeat:  0x04
     Error:   0x08
     Ack:     0x16
@@ -77,7 +77,7 @@ class ATEM
   connectionState: ATEM.ConnectionState.Closed
   localPackedId: 1
   sessionId: []
-  echoData: []
+  remotePacketId: []
 
   constructor: ->
     @event = new EventEmitter
@@ -118,8 +118,8 @@ class ATEM
     buffer[1] = 0x0C
     buffer[2] = @sessionId[0]
     buffer[3] = @sessionId[1]
-    buffer[4] = @echoData[0]
-    buffer[5] = @echoData[1]
+    buffer[4] = @remotePacketId[0]
+    buffer[5] = @remotePacketId[1]
     buffer[9] = 0x41
     @_sendPacket buffer
 
@@ -156,15 +156,14 @@ class ATEM
     console.log 'RECV', message if DEBUG
     flags = message[0] >> 3
     @sessionId = [message[2], message[3]]
-    @echoData = [message[10], message[11]]
+    @remotePacketId = [message[10], message[11]]
 
     # Send hello answer packet when receive connect flags
-    if flags & ATEM.PacketFlag.Connect
+    if flags & ATEM.PacketFlag.Connect && !(flags & ATEM.PacketFlag.Repeat)
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
 
-    # Send ping packet, Emit 'ping' event after sent
+    # Emit 'ping' event on receive ack
     if flags & ATEM.PacketFlag.Ack && @connectionState == ATEM.ConnectionState.Established
-      @_sendAck()
       @event.emit 'ping', null, null
 
     # Parse commands, Emit 'stateChanged' event after parse
@@ -176,6 +175,9 @@ class ATEM
     if flags & ATEM.PacketFlag.Sync && length == 12 && @connectionState == ATEM.ConnectionState.SynSent
       @connectionState = ATEM.ConnectionState.Established
       @event.emit 'connect', null, null
+
+    # Send ack packet (called by answer packet in Skaarhoj)
+    if flags & ATEM.PacketFlag.Sync && @connectionState == ATEM.ConnectionState.Established
       @_sendAck()
 
   _parseCommand: (buffer) ->
