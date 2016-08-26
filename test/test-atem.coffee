@@ -7,14 +7,14 @@ ATEM   = require '../lib/atem'
 
 ATEM_ADDR = process.env['ATEM_ADDR'] || '172.16.0.2'
 ATEM_PORT = process.env['ATEM_PORT'] || 9910
+TIMEOUT = process.env['TIMEOUT'] || 10000
 
 describe 'Atem', ->
+  @timeout TIMEOUT
   sw = new ATEM
 
   before (done) ->
-    sw.once('ping', ->
-      sw.once('stateChanged', done)
-    ) # Change me
+    sw.once('connect', done)
     sw.connect(ATEM_ADDR, ATEM_PORT)
 
   getCameraInputs = ->
@@ -194,7 +194,7 @@ describe 'Atem', ->
       async.forEachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.downstreamKeyOn[index]).be.true
-          next null, null
+          next err, null
         )
         sw.changeDownstreamKeyOn(index, true)
       , done)
@@ -215,7 +215,7 @@ describe 'Atem', ->
       async.forEachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.downstreamKeyTie[index]).be.true
-          next null, null
+          next err, null
         )
         sw.changeDownstreamKeyTie(index, true)
       , done)
@@ -236,7 +236,7 @@ describe 'Atem', ->
       async.forEachOfSeries(sw.state.video.upstreamKeyState, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.upstreamKeyState[index]).be.true
-          next null, null
+          next err, null
         )
         sw.changeUpstreamKeyState(index, true)
       , done)
@@ -254,7 +254,7 @@ describe 'Atem', ->
     it 'expects change', (done) ->
       sw.once('stateChanged', (err, state) ->
         expect(state.video.upstreamKeyNextBackground).be.false
-        done null, null
+        done err, null
       )
       sw.changeUpstreamKeyNextState(0, true)
       sw.changeUpstreamKeyNextBackground(false)
@@ -267,16 +267,16 @@ describe 'Atem', ->
         sw.changeUpstreamKeyNextState(index, false)
         next null, null
       )
-      setTimeout(done, 100)
+      setTimeout(done, 1000)
 
     before initialize
 
     it 'expects change', (done) ->
       async.forEachOfSeries(sw.state.video.upstreamKeyNextState, (state, index, next) ->
-        sw.once('stateChanged', (err, state) ->
-          expect(state.video.upstreamKeyNextState[index]).be.true
+        setTimeout( -> # temp
+          expect(sw.state.video.upstreamKeyNextState[index]).be.true
           next null, null
-        )
+        , 100)
         sw.changeUpstreamKeyNextState(index, true)
       , done)
 
@@ -308,8 +308,9 @@ describe 'Atem', ->
     initialize = (done) ->
       async.eachSeries(getAudioChannels(), (channel, next) ->
         sw.changeAudioChannelGain(channel, 0.5011853596610636)
-        next null, null
-      , done)
+        setTimeout(next, 50)
+      )
+      setTimeout(done, 1000)
 
     before initialize
 
@@ -317,7 +318,7 @@ describe 'Atem', ->
       async.eachSeries(getAudioChannels(), (channel, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.audio.channels[channel].gain).be.eq(1)
-          next null, null
+          next err, null
         )
         sw.changeAudioChannelGain(channel, 1)
       , done)

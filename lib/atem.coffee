@@ -162,10 +162,6 @@ class ATEM
     if flags & ATEM.PacketFlag.Connect && !(flags & ATEM.PacketFlag.Repeat)
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
 
-    # Emit 'ping' event on receive ack
-    if flags & ATEM.PacketFlag.Ack && @connectionState == ATEM.ConnectionState.Established
-      @event.emit 'ping', null, null
-
     # Parse commands, Emit 'stateChanged' event after parse
     if flags & ATEM.PacketFlag.Sync && length > 12
       @_parseCommand message.slice(12)
@@ -179,6 +175,7 @@ class ATEM
     # Send ack packet (called by answer packet in Skaarhoj)
     if flags & ATEM.PacketFlag.Sync && @connectionState == ATEM.ConnectionState.Established
       @_sendAck()
+      @event.emit 'ping', null, null
 
   _parseCommand: (buffer) ->
     length = @_parseNumber(buffer[0..1])
@@ -381,7 +378,7 @@ class ATEM
       (@state.video.upstreamKeyNextState[1] << 2) +
       (@state.video.upstreamKeyNextState[2] << 3) +
       (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
+    @_sendCommand('CTTp', [0x02, 0x00, 0x00, states])
 
   changeUpstreamKeyNextState: (number, state) ->
     @state.video.upstreamKeyNextState[number] = state
@@ -390,7 +387,7 @@ class ATEM
       (@state.video.upstreamKeyNextState[1] << 2) +
       (@state.video.upstreamKeyNextState[2] << 3) +
       (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
+    @_sendCommand('CTTp', [0x02, 0x00, 0x00, states])
 
   changeAudioMasterGain: (gain) ->
     gain = gain * AUDIO_GAIN_RATE
