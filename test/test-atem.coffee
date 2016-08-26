@@ -182,7 +182,7 @@ describe 'Atem', ->
 
   describe 'changeDownstreamKeyOn', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
         sw.changeDownstreamKeyOn(index, false)
         next null, null
       )
@@ -191,7 +191,7 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.downstreamKeyOn[index]).be.true
           next err, null
@@ -203,7 +203,7 @@ describe 'Atem', ->
 
   describe 'changeDownstreamKeyTie', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
         sw.changeDownstreamKeyTie(index, false)
         next null, null
       )
@@ -212,7 +212,7 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyTie, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.downstreamKeyTie[index]).be.true
           next err, null
@@ -224,7 +224,7 @@ describe 'Atem', ->
 
   describe 'changeUpstreamKeyState', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
         sw.changeUpstreamKeyState(index, false)
         next null, null
       )
@@ -233,7 +233,7 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyState, (state, index, next) ->
         sw.once('stateChanged', (err, state) ->
           expect(state.video.ME[0].upstreamKeyState[index]).be.true
           next err, null
@@ -263,7 +263,7 @@ describe 'Atem', ->
 
   describe 'changeUpstreamKeyNextState', ->
     initialize = (done) ->
-      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
         sw.changeUpstreamKeyNextState(index, false)
         next null, null
       )
@@ -272,7 +272,7 @@ describe 'Atem', ->
     before initialize
 
     it 'expects change', (done) ->
-      async.forEachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
+      async.eachOfSeries(sw.state.video.ME[0].upstreamKeyNextState, (state, index, next) ->
         setTimeout( -> # temp
           expect(sw.state.video.ME[0].upstreamKeyNextState[index]).be.true
           next null, null
