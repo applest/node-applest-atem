@@ -380,30 +380,49 @@ class ATEM
     for key2 of obj2
       obj1[key2] = obj2[key2] if obj2.hasOwnProperty(key2)
 
-  changeProgramInput: (input) -> # me
-    @_sendCommand('CPgI', [0x00, 0x00, input >> 8, input & 0xFF])
+  changeProgramInput: (input, me = 0) ->
+    @_sendCommand('CPgI', [me, 0x00, input >> 8, input & 0xFF])
 
-  changePreviewInput: (input) -> # me
-    @_sendCommand('CPvI', [0x00, 0x00, input >> 8, input & 0xFF])
+  changePreviewInput: (input, me = 0) ->
+    @_sendCommand('CPvI', [me, 0x00, input >> 8, input & 0xFF])
 
-  fadeToBlack: -> # me
-    @_sendCommand('FtbA', [0x00, 0x02, 0x58, 0x99])
+  fadeToBlack: (me = 0) ->
+    @_sendCommand('FtbA', [me, 0x00, 0x00, 0x00])
 
-  autoTransition: -> # me
-    @_sendCommand('DAut', [0x00, 0x00, 0x00, 0x00])
+  autoTransition: (me = 0) ->
+    @_sendCommand('DAut', [me, 0x00, 0x00, 0x00])
 
-  cutTransition: -> # me
-    @_sendCommand('DCut', [0x00, 0xef, 0xbf, 0x5f])
+  cutTransition: (me = 0) ->
+    @_sendCommand('DCut', [me, 0xef, 0xbf, 0x5f])
 
-  changeTransitionPosition: (position) -> # me
-    @_sendCommand('CTPs', [0x00, 0xe4, position/256, position%256])
-    @_sendCommand('CTPs', [0x00, 0xf6, 0x00, 0x00]) if position == 10000
+  changeTransitionPosition: (position, me = 0) ->
+    if position >= 10000
+      @_sendCommand('CTPs', [me, 0x00, 0x00, 0x00])
+    else
+      @_sendCommand('CTPs', [me, 0x00, position/256, position%256])
 
-  changeTransitionPreview: (state) -> # me
-    @_sendCommand('CTPr', [0x00, state, 0x00, 0x00])
+  changeTransitionPreview: (state, me = 0) ->
+    @_sendCommand('CTPr', [me, state, 0x00, 0x00])
 
-  changeTransitionType: (type) -> # me
-    @_sendCommand('CTTp', [0x01, 0x00, type, 0x02])
+  changeTransitionType: (type, me = 0) ->
+    @_sendCommand('CTTp', [0x01, me, type, 0x00])
+
+  changeUpstreamKeyState: (number, state, me = 0) ->
+    @_sendCommand('CKOn', [me, number, state, 0x00])
+
+  changeUpstreamKeyNextBackground: (state, me = 0) ->
+    @state.video.ME[me].upstreamKeyNextBackground = state
+    stateBit = @state.video.ME[me].upstreamKeyNextBackground
+    for i in [0...@state.video.ME[me].numberOfKeyers]
+      stateBit += @state.video.ME[me].upstreamKeyNextState[i] << (i+1)
+    @_sendCommand('CTTp', [0x02, me, 0x00, stateBit])
+
+  changeUpstreamKeyNextState: (number, state, me = 0) ->
+    @state.video.ME[me].upstreamKeyNextState[number] = state
+    stateBit = @state.video.ME[me].upstreamKeyNextBackground
+    for i in [0...@state.video.ME[me].numberOfKeyers]
+      stateBit += @state.video.ME[me].upstreamKeyNextState[i] << (i+1)
+    @_sendCommand('CTTp', [0x02, me, 0x00, stateBit])
 
   changeAuxInput: (aux, input) ->
     @_sendCommand('CAuS', [0x01, aux, input >> 8, input & 0xFF])
@@ -413,27 +432,6 @@ class ATEM
 
   changeDownstreamKeyTie: (number, state) ->
     @_sendCommand('CDsT', [number, state, 0xff, 0xff])
-
-  changeUpstreamKeyState: (number, state) ->
-    @_sendCommand('CKOn', [0x00, number, state, 0x90])
-
-  changeUpstreamKeyNextBackground: (state) ->
-    @state.video.upstreamKeyNextBackground = state
-    states = @state.video.upstreamKeyNextBackground +
-      (@state.video.upstreamKeyNextState[0] << 1) +
-      (@state.video.upstreamKeyNextState[1] << 2) +
-      (@state.video.upstreamKeyNextState[2] << 3) +
-      (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x00, states])
-
-  changeUpstreamKeyNextState: (number, state) ->
-    @state.video.upstreamKeyNextState[number] = state
-    states = @state.video.upstreamKeyNextBackground +
-      (@state.video.upstreamKeyNextState[0] << 1) +
-      (@state.video.upstreamKeyNextState[1] << 2) +
-      (@state.video.upstreamKeyNextState[2] << 3) +
-      (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x00, states])
 
   changeAudioMasterGain: (gain) ->
     gain = gain * AUDIO_GAIN_RATE
