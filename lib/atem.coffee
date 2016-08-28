@@ -396,10 +396,9 @@ class ATEM
     @_sendCommand('DCut', [me, 0xef, 0xbf, 0x5f])
 
   changeTransitionPosition: (position, me = 0) ->
+    @_sendCommand('CTPs', [me, 0x00, position/256, position%256])
     if position >= 10000
       @_sendCommand('CTPs', [me, 0x00, 0x00, 0x00])
-    else
-      @_sendCommand('CTPs', [me, 0x00, position/256, position%256])
 
   changeTransitionPreview: (state, me = 0) ->
     @_sendCommand('CTPr', [me, state, 0x00, 0x00])
