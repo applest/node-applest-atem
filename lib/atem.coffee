@@ -47,30 +47,58 @@ class ATEM
     Program: 0x01
     Preview: 0x02
 
+  @ConnectionState =
+    None:        0x00
+    SynSent:     0x01
+    Established: 0x02
+    Closed:      0x03
+
   @PacketFlag =
-    Sync:    0x01
-    Connect: 0x02
+    Sync:    0x01 # Ack called by Skaarhoj
+    Connect: 0x02 # Init called by Skaarhoj
     Repeat:  0x04
-    Unknown: 0x08
-    Ack:     0x10
+    Error:   0x08
+    Ack:     0x16
 
   state:
+    topology:
+      numberOfMEs: null
+      numberOfSources: null
+      numberOfColorGenerators: null
+      numberOfAUXs: null
+      numberOfDownstreamKeys: null
+      numberOfStingers: null
+      numberOfDVEs: null
+      numberOfSuperSources: null
     tallys: []
     channels: {}
     video:
-      upstreamKeyNextState: []
-      upstreamKeyState: []
+      ME: [
+        # programInput: null
+        # previewInput: null
+        # transitionPreview: null
+        # transitionPosition: null
+        # transitionFrameCount: null
+        # fadeToBlack: null
+        # upstreamKeyNextState: []
+        # upstreamKeyState: []
+      ]
       downstreamKeyOn: []
       downstreamKeyTie: []
       auxs: {}
     audio:
+      hasMonitor: null
+      numberOfChannels: null
       channels: {}
 
-  connected: false
+  connectionState: ATEM.ConnectionState.Closed
   localPackedId: 1
   sessionId: []
+  remotePacketId: []
 
-  constructor: ->
+  constructor: (options = {}) ->
+    @forceOldStyle = options.forceOldStyle || false
+
     @event = new EventEmitter
     @commandEvent = new EventEmitter
     @event.on 'ping', (err) =>
@@ -78,8 +106,8 @@ class ATEM
 
     setInterval( =>
       return if @lastConnectAt + RECONNECT_INTERVAL > new Date().getTime()
-      if @connected
-        @connected = false
+      if @connectionState == ATEM.ConnectionState.Established
+        @connectionState = ATEM.ConnectionState.Closed
         @event.emit 'disconnect', null, null
       @localPackedId = 1
       @sessionId = []
@@ -94,6 +122,7 @@ class ATEM
     @socket.bind local_port
 
     @_sendPacket COMMAND_CONNECT_HELLO
+    @connectionState = ATEM.ConnectionState.SynSent
 
   on: (name, callback) ->
     @event.on name, callback
@@ -101,9 +130,22 @@ class ATEM
   once: (name, callback) ->
     @event.once name, callback
 
+  _sendAck: ->
+    buffer = new Buffer(12)
+    buffer.fill(0)
+    buffer[0] = 0x80
+    buffer[1] = 0x0C
+    buffer[2] = @sessionId[0]
+    buffer[3] = @sessionId[1]
+    buffer[4] = @remotePacketId[0]
+    buffer[5] = @remotePacketId[1]
+    buffer[9] = 0x41
+    @_sendPacket buffer
+
   _sendCommand: (command, payload) ->
     payload = new Buffer(payload) unless Buffer.isBuffer(payload)
     buffer = new Buffer(20 + payload.length)
+    buffer.fill(0)
     buffer[0] = (20+payload.length)/256 | 0x08
     buffer[1] = (20+payload.length)%256
     buffer[2] = @sessionId[0]
@@ -129,34 +171,44 @@ class ATEM
   _receivePacket: (message, remote) =>
     length = ((message[0] & 0x07) << 8) | message[1]
     return if length != remote.size
+
+    console.log 'RECV', message if DEBUG
     flags = message[0] >> 3
     @sessionId = [message[2], message[3]]
+    @remotePacketId = [message[10], message[11]]
 
-    if flags & ATEM.PacketFlag.Connect
+    # Send hello answer packet when receive connect flags
+    if flags & ATEM.PacketFlag.Connect && !(flags & ATEM.PacketFlag.Repeat)
       @_sendPacket COMMAND_CONNECT_HELLO_ANSWER
-      unless @connected
-        @connected = true
-        @event.emit 'connect', null, null
-    else if flags & ATEM.PacketFlag.Sync
-      @_sendPacket [
-        0x80, 0x0C, @sessionId[0], @sessionId[1],
-        message[10], message[11], 0x00, 0x00,
-        0x00, 0x41, 0x00, 0x00
-      ]
-      @event.emit 'ping', null, null
-    if remote.size > 12 && remote.size != 20
+
+    # Parse commands, Emit 'stateChanged' event after parse
+    if flags & ATEM.PacketFlag.Sync && length > 12
       @_parseCommand message.slice(12)
       @event.emit 'stateChanged', null, @state
+
+    # Send ping packet, Emit 'connect' event after receive all stats
+    if flags & ATEM.PacketFlag.Sync && length == 12 && @connectionState == ATEM.ConnectionState.SynSent
+      @connectionState = ATEM.ConnectionState.Established
+      @event.emit 'connect', null, null
+
+    # Send ack packet (called by answer packet in Skaarhoj)
+    if flags & ATEM.PacketFlag.Sync && @connectionState == ATEM.ConnectionState.Established
+      @_sendAck()
+      @event.emit 'ping', null, null
 
   _parseCommand: (buffer) ->
     length = @_parseNumber(buffer[0..1])
     name = @_parseString(buffer[4..7])
 
-    console.log 'RECV', "#{name}(#{length})", buffer.slice(0, length) if DEBUG
+    console.log 'COMMAND', "#{name}(#{length})", buffer.slice(0, length) if DEBUG
 
     @_setStatus name, buffer.slice(0, length).slice(8)
     if buffer.length > length
       @_parseCommand buffer.slice(length)
+
+    if @forceOldStyle # Support 0.1.x
+      for key, value of @state.video.ME[0]
+        @state.video[key] = value
 
   _setStatus: (name, buffer) ->
     @commandEvent.emit name, null, buffer
@@ -170,6 +222,25 @@ class ATEM
         @state._pin = @_parseString(buffer)
         @state.model = buffer[40] # XXX: is this sure?
 
+      when '_top'
+        @state.topology.numberOfMEs = buffer[0]
+        @state.topology.numberOfSources = buffer[1]
+        @state.topology.numberOfColorGenerators = buffer[2]
+        @state.topology.numberOfAUXs = buffer[3]
+        @state.topology.numberOfDownstreamKeys = buffer[4]
+        @state.topology.numberOfStingers = buffer[5]
+        @state.topology.numberOfDVEs = buffer[6]
+        @state.topology.numberOfSuperSources = buffer[7]
+        for me in [0...@state.topology.numberOfMEs]
+          @state.video.ME[me] = {
+            upstreamKeyState: []
+            upstreamKeyNextState: []
+          }
+
+      when '_MeC'
+        me = buffer[0]
+        @state.video.ME[me].numberOfKeyers = buffer[1]
+
       when 'InPr'
         channel = @_parseNumber(buffer[0..1])
         @state.channels[channel] =
@@ -177,26 +248,36 @@ class ATEM
           label: @_parseString(buffer[22..25])
 
       when 'PrgI'
-        @state.video.programInput = @_parseNumber(buffer[2..3])
+        me = buffer[0]
+        @state.video.ME[me].programInput = @_parseNumber(buffer[2..3])
 
       when 'PrvI'
-        @state.video.previewInput = @_parseNumber(buffer[2..3])
+        me = buffer[0]
+        @state.video.ME[me].previewInput = @_parseNumber(buffer[2..3])
 
       when 'TrPr'
-        @state.video.transitionPreview = if buffer[1] > 0 then true else false
+        me = buffer[0]
+        @state.video.ME[me].transitionPreview = if buffer[1] > 0 then true else false
 
       when 'TrPs'
-        @state.video.transitionPosition = @_parseNumber(buffer[4..5])/10000 # 0 - 10000
-        @state.video.transitionFrameCount = buffer[2] # 0 - 30
+        me = buffer[0]
+        @state.video.ME[me].transitionPosition = @_parseNumber(buffer[4..5])/10000 # 0 - 10000
+        @state.video.ME[me].transitionFrameCount = buffer[2] # 0 - 30
+
+      when 'FtbS' # Fade To Black Setting
+        me = buffer[0]
+        @state.video.ME[me].fadeToBlack = if buffer[1] > 0 then true else false
 
       when 'TrSS'
-        @state.video.transitionStyle = @_parseNumber(buffer[0..1])
-        @state.video.upstreamKeyNextBackground = (buffer[2] >> 0 & 1) == 0x01
-        @state.video.upstreamKeyNextState[0] = (buffer[2] >> 1 & 1) == 0x01
-        if @state.model != ATEM.Model.TVS && @state.model != ATEM.Model.PS4K
-          @state.video.upstreamKeyNextState[1] = (buffer[2] >> 2 & 1) == 0x01
-          @state.video.upstreamKeyNextState[2] = (buffer[2] >> 3 & 1) == 0x01
-          @state.video.upstreamKeyNextState[3] = (buffer[2] >> 4 & 1) == 0x01
+        me = buffer[0]
+        @state.video.ME[me].transitionStyle = buffer[1]
+        @state.video.ME[me].upstreamKeyNextBackground = (buffer[2] >> 0 & 1) == 0x01
+        for i in [0...@state.video.ME[me].numberOfKeyers]
+          @state.video.ME[me].upstreamKeyNextState[i] = (buffer[2] >> (i+1) & 1) == 0x01
+
+      when 'KeOn'
+        me = buffer[0]
+        @state.video.ME[me].upstreamKeyState[buffer[1]] = if buffer[2] == 1 then true else false
 
       when 'DskS'
         @state.video.downstreamKeyOn[buffer[0]] = if buffer[1] == 1 then true else false
@@ -204,18 +285,16 @@ class ATEM
       when 'DskP'
         @state.video.downstreamKeyTie[buffer[0]] = if buffer[1] == 1 then true else false
 
-      when 'KeOn'
-        @state.video.upstreamKeyState[buffer[1]] = if buffer[2] == 1 then true else false
-
-      when 'FtbS' # Fade To Black Setting
-        @state.video.fadeToBlack = if buffer[1] > 0 then true else false
-
       when 'TlIn' # Tally Input
         @state.tallys = @_bufferToArray(buffer[2..])
 
       when 'AuxS' # Auxially Setting
         aux = buffer[0]
         @state.video.auxs[aux] = @_parseNumber(buffer[2..3])
+
+      when '_AMC' # Audio Mixer Config
+        @state.audio.numberOfChannels = @_parseNumber(buffer[0])
+        @state.audio.hasMonitor = buffer[1] == 1
 
       when 'AMIP' # Audio Monitor Input Position
         channel = @_parseNumber buffer[0..1]
@@ -301,60 +380,57 @@ class ATEM
     for key2 of obj2
       obj1[key2] = obj2[key2] if obj2.hasOwnProperty(key2)
 
-  changeProgramInput: (input) ->
-    @_sendCommand('CPgI', [0x00, 0x00, input >> 8, input & 0xFF])
+  changeProgramInput: (input, me = 0) ->
+    @_sendCommand('CPgI', [me, 0x00, input >> 8, input & 0xFF])
 
-  changePreviewInput: (input) ->
-    @_sendCommand('CPvI', [0x00, 0x00, input >> 8, input & 0xFF])
+  changePreviewInput: (input, me = 0) ->
+    @_sendCommand('CPvI', [me, 0x00, input >> 8, input & 0xFF])
+
+  fadeToBlack: (me = 0) ->
+    @_sendCommand('FtbA', [me, 0x00, 0x00, 0x00])
+
+  autoTransition: (me = 0) ->
+    @_sendCommand('DAut', [me, 0x00, 0x00, 0x00])
+
+  cutTransition: (me = 0) ->
+    @_sendCommand('DCut', [me, 0xef, 0xbf, 0x5f])
+
+  changeTransitionPosition: (position, me = 0) ->
+    @_sendCommand('CTPs', [me, 0x00, position/256, position%256])
+    if position >= 10000
+      @_sendCommand('CTPs', [me, 0x00, 0x00, 0x00])
+
+  changeTransitionPreview: (state, me = 0) ->
+    @_sendCommand('CTPr', [me, state, 0x00, 0x00])
+
+  changeTransitionType: (type, me = 0) ->
+    @_sendCommand('CTTp', [0x01, me, type, 0x00])
+
+  changeUpstreamKeyState: (number, state, me = 0) ->
+    @_sendCommand('CKOn', [me, number, state, 0x00])
+
+  changeUpstreamKeyNextBackground: (state, me = 0) ->
+    @state.video.ME[me].upstreamKeyNextBackground = state
+    stateBit = @state.video.ME[me].upstreamKeyNextBackground
+    for i in [0...@state.video.ME[me].numberOfKeyers]
+      stateBit += @state.video.ME[me].upstreamKeyNextState[i] << (i+1)
+    @_sendCommand('CTTp', [0x02, me, 0x00, stateBit])
+
+  changeUpstreamKeyNextState: (number, state, me = 0) ->
+    @state.video.ME[me].upstreamKeyNextState[number] = state
+    stateBit = @state.video.ME[me].upstreamKeyNextBackground
+    for i in [0...@state.video.ME[me].numberOfKeyers]
+      stateBit += @state.video.ME[me].upstreamKeyNextState[i] << (i+1)
+    @_sendCommand('CTTp', [0x02, me, 0x00, stateBit])
 
   changeAuxInput: (aux, input) ->
     @_sendCommand('CAuS', [0x01, aux, input >> 8, input & 0xFF])
-
-  fadeToBlack: ->
-    @_sendCommand('FtbA', [0x00, 0x02, 0x58, 0x99])
-
-  autoTransition: ->
-    @_sendCommand('DAut', [0x00, 0x00, 0x00, 0x00])
-
-  cutTransition: ->
-    @_sendCommand('DCut', [0x00, 0xef, 0xbf, 0x5f])
-
-  changeTransitionPosition: (position) ->
-    @_sendCommand('CTPs', [0x00, 0xe4, position/256, position%256])
-    @_sendCommand('CTPs', [0x00, 0xf6, 0x00, 0x00]) if position == 10000
-
-  changeTransitionPreview: (state) ->
-    @_sendCommand('CTPr', [0x00, state, 0x00, 0x00])
-
-  changeTransitionType: (type) ->
-    @_sendCommand('CTTp', [0x01, 0x00, type, 0x02])
 
   changeDownstreamKeyOn: (number, state) ->
     @_sendCommand('CDsL', [number, state, 0xff, 0xff])
 
   changeDownstreamKeyTie: (number, state) ->
     @_sendCommand('CDsT', [number, state, 0xff, 0xff])
-
-  changeUpstreamKeyState: (number, state) ->
-    @_sendCommand('CKOn', [0x00, number, state, 0x90])
-
-  changeUpstreamKeyNextBackground: (state) ->
-    @state.video.upstreamKeyNextBackground = state
-    states = @state.video.upstreamKeyNextBackground +
-      (@state.video.upstreamKeyNextState[0] << 1) +
-      (@state.video.upstreamKeyNextState[1] << 2) +
-      (@state.video.upstreamKeyNextState[2] << 3) +
-      (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
-
-  changeUpstreamKeyNextState: (number, state) ->
-    @state.video.upstreamKeyNextState[number] = state
-    states = @state.video.upstreamKeyNextBackground +
-      (@state.video.upstreamKeyNextState[0] << 1) +
-      (@state.video.upstreamKeyNextState[1] << 2) +
-      (@state.video.upstreamKeyNextState[2] << 3) +
-      (@state.video.upstreamKeyNextState[3] << 4)
-    @_sendCommand('CTTp', [0x02, 0x00, 0x6a, states])
 
   changeAudioMasterGain: (gain) ->
     gain = gain * AUDIO_GAIN_RATE
