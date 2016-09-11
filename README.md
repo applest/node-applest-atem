@@ -11,6 +11,18 @@ Install this module using npm.
 $ npm install applest-atem --save
 ```
 
+## Recent changes
+
+- Workaround from 0.1.x
+Set `forceOldStyle` option to atem constructor if you upgrade this library from from 0.1.x.
+`state` returns extract 1ME stats.
+
+```javascript
+var atem = new ATEM({
+  forceOldStyle: true
+});
+```
+
 ## Usage
 
 ```javascript
@@ -20,9 +32,9 @@ var atem = new ATEM();
 atem.connect('192.168.1.220'); // Replace your ATEM switcher. address.
 
 atem.on('connect', function() {
-  atem.changeProgramInput(1);
-  atem.changePreviewInput(2);
-  atem.autoTransition();
+  atem.changeProgramInput(1); # ME1(0)
+  atem.changePreviewInput(2); # ME1(0)
+  atem.autoTransition(); # ME1(0)
 });
 
 atem.on('stateChanged', function(err, state) {
