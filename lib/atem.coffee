@@ -478,6 +478,7 @@ class ATEM
     payload[2] = 0x03
     payload[3] = 0x00
     payload[4] = 0x80
+    payload[9] = 0x01
     payload[16] = value/256
     payload[17] = value%256
     @_sendCommand('CCmd', payload)
