@@ -468,6 +468,18 @@ class ATEM
   deleteMacro: (number) -> # ATEM response with "MPrp"
     @_sendCommand('MAct', [0x00, number, 0x05, 0x00])
 
+  # Camera
+  setCameraControlIris: (input, value) ->
+    value = value * 2048
+    payload = new Buffer(24)
+    payload[0] = input
+    payload[1] = 0
+    payload[2] = 3
+    payload[3] = 0
+    payload[16] = value/256
+    payload[17] = value%256
+    @_sendCommand('CCmd', payload)
+
   # File
   lockMediaPool: (bankIndex, frameIndex) ->
     payload = [bankIndex/256, bankIndex%256, frameIndex/256, frameIndex%256, 0x00, 0x01, 0x00, 0x46]
