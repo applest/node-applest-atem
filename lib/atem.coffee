@@ -472,10 +472,12 @@ class ATEM
   setCameraControlIris: (input, value) ->
     value = value * 2048
     payload = new Buffer(24)
+    payload.fill(0)
     payload[0] = input
-    payload[1] = 0
-    payload[2] = 3
-    payload[3] = 0
+    payload[1] = 0x00
+    payload[2] = 0x03
+    payload[3] = 0x00
+    payload[4] = 0x80
     payload[16] = value/256
     payload[17] = value%256
     @_sendCommand('CCmd', payload)
