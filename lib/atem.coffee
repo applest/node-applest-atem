@@ -98,11 +98,16 @@ class ATEM
 
   constructor: (options = {}) ->
     @forceOldStyle = options.forceOldStyle || false
+    @localPort = options.localPort || 1024 + Math.floor(Math.random() * 64511) # 1024-65535
 
     @event = new EventEmitter
     @commandEvent = new EventEmitter
     @event.on 'ping', (err) =>
       @lastConnectAt = new Date().getTime()
+
+    @socket = dgram.createSocket 'udp4'
+    @socket.on 'message', @_receivePacket
+    @socket.bind @localPort
 
     setInterval( =>
       return if @lastConnectAt + RECONNECT_INTERVAL > new Date().getTime()
@@ -115,12 +120,6 @@ class ATEM
     , RECONNECT_INTERVAL)
 
   connect: (@address, @port = DEFAULT_PORT, local_port = 0) ->
-    local_port ||= 1024 + Math.floor(Math.random() * 64511) # 1024-65535
-
-    @socket = dgram.createSocket 'udp4'
-    @socket.on 'message', @_receivePacket
-    @socket.bind local_port
-
     @_sendPacket COMMAND_CONNECT_HELLO
     @connectionState = ATEM.ConnectionState.SynSent
 
