@@ -259,6 +259,27 @@ describe 'Atem', ->
 
     after initialize
 
+  describe 'downstreamKeyAuto', ->
+    initialize = (done) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+        sw.changeDownstreamKeyOn(index, false)
+        next null, null
+      )
+      setTimeout(done, 100)
+
+    before initialize
+
+    it 'expects change', (done) ->
+      async.eachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
+        sw.once('stateChanged', (err, state) ->
+          expect(state.video.downstreamKeyOn[index]).be.true
+          next err, null
+        )
+        sw.downstreamKeyAuto(index)
+      , done)
+
+    after initialize
+
   describe 'changeUpstreamKeyState', ->
     initialize = (done) ->
       for me in [0...sw.state.topology.numberOfMEs]
