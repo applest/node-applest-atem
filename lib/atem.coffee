@@ -431,6 +431,9 @@ class ATEM
   changeDownstreamKeyTie: (number, state) ->
     @_sendCommand('CDsT', [number, state, 0xff, 0xff])
 
+  downstreamKeyAuto: (number) ->
+    @_sendCommand('DDsA', [number, 0x00, 0x00, 0x00])
+
   changeAudioMasterGain: (gain) ->
     gain = gain * AUDIO_GAIN_RATE
     @_sendCommand('CAMM', [0x01, 0x00, gain/256, gain%256, 0x00, 0x00, 0x00, 0x00])
