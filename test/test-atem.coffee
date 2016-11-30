@@ -259,7 +259,7 @@ describe 'Atem', ->
 
     after initialize
 
-  describe 'downstreamKeyAuto', ->
+  describe 'autoDownstreamKey', ->
     initialize = (done) ->
       async.eachOfSeries(sw.state.video.downstreamKeyOn, (state, index, next) ->
         sw.changeDownstreamKeyOn(index, false)
@@ -275,7 +275,7 @@ describe 'Atem', ->
           expect(state.video.downstreamKeyOn[index]).be.true
           next err, null
         )
-        sw.downstreamKeyAuto(index)
+        sw.autoDownstreamKey(index)
       , done)
 
     after initialize
