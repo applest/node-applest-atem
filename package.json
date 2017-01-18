@@ -19,8 +19,7 @@
   "main": "./lib/atem.js",
   "scripts": {
     "test": "mocha test",
-    "build": "coffee -bc ./lib/atem.coffee",
-    "postinstall": "build"
+    "build": "coffee -bc ./lib/atem.coffee"
   },
   "dependencies": {
     "async": "^1.3.0",
