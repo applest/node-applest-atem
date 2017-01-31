@@ -18,16 +18,16 @@
   "author": "miyukki <yusei1128@gmail.com>",
   "main": "./lib/atem.js",
   "scripts": {
-    "test": "mocha test",
-    "build": "coffee -bc ./lib/atem.coffee",
-    "postinstall": "build"
+    "test": "cake test",
+    "build": "coffee -bco lib src",
+    "prepublish": "npm run build"
   },
   "dependencies": {
     "async": "^1.3.0",
-    "coffee-script": "1.7.1",
     "pngjs": "^2.3.1"
   },
   "devDependencies": {
+    "coffee-script": "1.7.1",
     "chai": "3.1.0",
     "it-each": "^0.3.1",
     "mocha": "2.2.5"
