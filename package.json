@@ -18,9 +18,9 @@
   "author": "miyukki <yusei1128@gmail.com>",
   "main": "./lib/atem.js",
   "scripts": {
-    "test": "mocha test",
-    "build": "coffee -bc ./lib/atem.coffee",
-    "postinstall": "build"
+    "test": "./node_modules/.bin/cake test",
+    "build": "./node_modules/.bin/coffee -bc ./lib/atem.coffee",
+    "prepublish": "build"
   },
   "dependencies": {
     "async": "^1.3.0",
