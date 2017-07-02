@@ -405,7 +405,7 @@ class ATEM
   changeTransitionType: (type, me = 0) ->
     @_sendCommand('CTTp', [0x01, me, type, 0x00])
 
-  changeTransitionPreview: (frames, me = 0) ->
+  changeTransitionMix: (frames, me = 0) ->
     @_sendCommand('CTMx', [me, frames, 0x00, 0x00])
 
   changeUpstreamKeyState: (number, state, me = 0) ->
