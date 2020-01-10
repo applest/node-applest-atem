@@ -444,6 +444,8 @@ describe 'Atem', ->
       sw.startRecordMacro(99, 'Test Macro', 'Hey! This is macro.')
       sw.changeProgramInput(2)
       sw.stopRecordMacro()
+      expect(sw.state.macro[99].name).be.eq('Test Macro')
+      expect(sw.state.macro[99].description).be.eq('Hey! This is macro.')
       sw.changeProgramInput(1)
       sw.runMacro(99)
       setTimeout( ->
