@@ -70,7 +70,7 @@ describe 'Atem', ->
       sw.changeAuxInput(0, 1)
       sw.changeAuxInput(1, 1)
       sw.changeAuxInput(2, 1)
-      setTimeout(done, 100)
+      setTimeout(done, 1000)
 
     it 'expects change all camera input', (done) ->
       auxs =  Object.keys(sw.state.video.auxs)
@@ -88,7 +88,7 @@ describe 'Atem', ->
     before (done) ->
       for me in [0...sw.state.topology.numberOfMEs]
         sw.fadeToBlack(me) if sw.state.video.ME[me].fadeToBlack
-      setTimeout(done, 1500)
+      setTimeout(done, 2000)
 
     it 'expects fade to black', (done) ->
       async.eachSeries([0...sw.state.topology.numberOfMEs], (me, nextME) ->
@@ -199,7 +199,7 @@ describe 'Atem', ->
     before (done) ->
       for me in [0...sw.state.topology.numberOfMEs]
         sw.changeTransitionType(ATEM.TransitionStyle.DIP, me)
-      setTimeout(done, 100)
+      setTimeout(done, 1000)
 
     it 'expects change all transition type', (done) ->
       types = if sw.state.model == ATEM.Model.TVS || sw.state.model == ATEM.Model.PS4K
@@ -394,6 +394,7 @@ describe 'Atem', ->
         sw.changeAudioChannelState(channel, false)
         next null, null
       , done)
+      # setTimeout(done, 100)
 
     before initialize
 
@@ -438,7 +439,7 @@ describe 'Atem', ->
   describe 'runMacro', ->
     before (done) ->
       sw.changeProgramInput(1)
-      setTimeout(done, 100)
+      setTimeout(done, 1000)
 
     it 'expects run macro', (done) ->
       sw.startRecordMacro(99, 'Test Macro', 'Hey! This is macro.')
@@ -456,7 +457,7 @@ describe 'Atem', ->
     after (done) ->
       sw.deleteMacro(99)
       sw.changeProgramInput(1)
-      setTimeout(done, 100)
+      setTimeout(done, 1000)
 
   after ->
     console.log """\n-------- ATEM Information --------
