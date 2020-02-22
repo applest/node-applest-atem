@@ -90,6 +90,8 @@ class ATEM
       hasMonitor: null
       numberOfChannels: null
       channels: {}
+    macros: {}
+    macro_banks: null
 
   connectionState: ATEM.ConnectionState.Closed
   localPackedId: 1
@@ -239,6 +241,19 @@ class ATEM
       when '_MeC'
         me = buffer[0]
         @state.video.ME[me].numberOfKeyers = buffer[1]
+
+      when '_MAC'
+        @state.macro_banks = buffer[1]
+
+      when 'MPrp'
+        isUsed = buffer[2]
+        if isUsed # Only keep info on macros that are present
+          nameLength = buffer[5]
+          descriptionLength = buffer[7]
+          @state.macros[buffer[1]] =
+            isUsed: buffer[2]
+            name: @_parseString(buffer[8...nameLength+8])
+            description: @_parseString(buffer[8+nameLength...8+nameLength+descriptionLength])
 
       when 'InPr'
         channel = @_parseNumber(buffer[0..1])
